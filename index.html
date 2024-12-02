@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>單字卡學習</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="checkbox-container">
+            <label>
+                <input type="checkbox" id="hideAddCard">
+                隱藏新增單詞卡
+            </label>
+            <label>
+                <input type="checkbox" id="hideSettings">
+                隱藏設置
+            </label>
+        </div>
+
+        <div class="add-card-section">
+            <h2>新增單字卡</h2>
+            <div class="input-group">
+                <input type="text" id="englishWord" placeholder="請輸入英文單字">
+                <input type="text" id="chineseTranslation" placeholder="請輸入中文翻譯">
+            </div>
+            <div class="button-group">
+                <button id="addCard">新增單字卡</button>
+                <button id="translateBtn" class="translate-btn">翻譯</button>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="slider-container">
+                <label>卡片寬度：</label>
+                <input type="range" id="sizeSlider" min="150" max="800" value="250">
+                <span id="sizeValue">250px</span>
+            </div>
+            <div class="display-mode">
+                <label>顯示模式：</label>
+                <button id="showAll" class="mode-btn active">顯示全部</button>
+                <button id="showEnglish" class="mode-btn">只顯示英文</button>
+                <button id="showChinese" class="mode-btn">只顯示中文</button>
+                <button id="editMode" class="mode-btn">編輯模式</button>
+                <button id="darkMode" class="mode-btn">夜間模式</button>
+                <button id="shuffleCards" class="mode-btn">隨機排列</button>
+            </div>
+            <div class="display-mode" style="margin-top: 8px;">
+                <label>測試按鈕：</label>
+                <button id="testSave" class="mode-btn">測試存儲</button>
+                <button id="testLoad" class="mode-btn">測試讀取</button>
+            </div>
+        </div>
+
+        <div class="cards-container" id="cardsContainer">
+            <!-- 單字卡將在這裡動態生成 -->
+        </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html> 

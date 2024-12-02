@@ -1,0 +1,339 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.add-card-section {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.add-card-section input {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+.flashcard {
+    background-color: white;
+    padding: 20px;
+    margin: 10px 0;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    cursor: pointer;
+    width: 250px;
+    min-height: 150px;
+    transition: all 0.3s ease;
+    flex-grow: 0;
+    flex-shrink: 0;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow: hidden;
+    position: relative;
+    animation: shuffleAnimation 0.5s ease forwards;
+}
+
+.flashcard .english {
+    font-size: 24px;
+    margin-bottom: 10px;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.flashcard .chinese {
+    font-size: 18px;
+    color: #666;
+    display: none;
+    word-break: break-all;
+    white-space: pre-wrap;
+}
+
+.flashcard.flipped .chinese {
+    display: block;
+}
+
+.control-panel {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.slider-container {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.slider-container label {
+    white-space: nowrap;
+}
+
+.slider-container input[type="range"] {
+    flex: 1;
+}
+
+#sizeValue {
+    min-width: 60px;
+    text-align: right;
+}
+
+.cards-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    justify-content: flex-start;
+}
+
+.display-mode {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.display-mode label {
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.mode-btn {
+    background-color: #f0f0f0;
+    color: #333;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    height: 28px;
+    line-height: 1;
+}
+
+.mode-btn.active {
+    background-color: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+/* 修改卡片顯示模式的相關樣式 */
+.flashcard.mode-english .chinese,
+.flashcard.mode-chinese .english {
+    display: none;
+}
+
+.flashcard.mode-all .chinese,
+.flashcard.mode-chinese .chinese {
+    display: block;
+}
+
+.delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #ff4444;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    border: none;
+    z-index: 1;
+}
+
+.delete-btn:hover {
+    background-color: #cc0000;
+}
+
+.flashcard.edit-mode .delete-btn {
+    display: flex;
+}
+
+/* 添加夜間模式相關樣式 */
+body.dark-mode {
+    background-color: #1a1a1a;
+    color: #ffffff;
+}
+
+body.dark-mode .add-card-section,
+body.dark-mode .control-panel,
+body.dark-mode .flashcard {
+    background-color: #2d2d2d;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+body.dark-mode .add-card-section input {
+    background-color: #1a1a1a;
+    border-color: #404040;
+    color: #ffffff;
+}
+
+body.dark-mode .mode-btn {
+    background-color: #404040;
+    color: #ffffff;
+    border-color: #505050;
+}
+
+body.dark-mode .mode-btn.active {
+    background-color: #4CAF50;
+    border-color: #4CAF50;
+}
+
+body.dark-mode .flashcard .chinese {
+    color: #b3b3b3;
+}
+
+/* 修改滑軌顏色 */
+body.dark-mode input[type="range"] {
+    background-color: #404040;
+}
+
+body.dark-mode input[type="range"]::-webkit-slider-thumb {
+    background: #4CAF50;
+}
+
+body.dark-mode input[type="range"]::-moz-range-thumb {
+    background: #4CAF50;
+}
+
+@keyframes shuffleAnimation {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(-20px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.input-group {
+    position: relative;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.translate-btn {
+    padding: 10px 15px;
+    height: 42px; /* 與輸入框同高 */
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.translate-btn:hover {
+    background-color: #1976D2;
+}
+
+.translate-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.translate-btn {
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 10px 20px;
+}
+
+.translate-btn:hover {
+    background-color: #1976D2;
+}
+
+.translate-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.checkbox-container {
+    background-color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    gap: 20px;
+}
+
+.checkbox-container label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.checkbox-container input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* 夜間模式樣式 */
+body.dark-mode .checkbox-container {
+    background-color: #2d2d2d;
+    color: #ffffff;
+}
+
+/* 隱藏新增單詞卡區塊的樣式 */
+.add-card-section.hidden {
+    display: none;
+}
+
+/* 隱藏控制面板的樣式 */
+.control-panel.hidden {
+    display: none;
+} 
