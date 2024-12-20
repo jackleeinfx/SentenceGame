@@ -206,12 +206,27 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
+        // 添加播放按鈕
+        const playBtn = document.createElement('button');
+        playBtn.className = 'play-btn';
+        playBtn.innerHTML = '🔊';
+        playBtn.title = '播放語音';
+        playBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // 防止觸發卡片的點擊事件
+            responsiveVoice.speak(card.english, "UK English Female", {
+                pitch: 1,
+                rate: 0.9,
+                volume: 1
+            });
+        });
+
         div.innerHTML = `
             <div class="english">${card.english}</div>
             <div class="chinese">${card.chinese}</div>
         `;
         
         div.appendChild(deleteBtn);
+        div.appendChild(playBtn); // 添加播放按鈕到卡片
 
         // 卡片點擊事件
         div.addEventListener('click', () => {
@@ -579,11 +594,56 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('❌ 讀取失敗:', error);
             console.error('詳細錯誤:', error.message);
-            alert('讀取失敗: ' + error.message);
+            alert('讀取失���: ' + error.message);
         } finally {
             testLoadBtn.textContent = '測試讀取';
             testLoadBtn.disabled = false;
             console.log('===== 讀取測試結束 =====');
         }
     });
+
+    // 獲取字體大小滑軌元素
+    const fontSizeSlider = document.getElementById('fontSizeSlider');
+    const fontSizeValue = document.getElementById('fontSizeValue');
+
+    // 從本地存儲加載字體大小設置
+    const savedFontSize = localStorage.getItem('fontSize') || '24';
+    fontSizeSlider.value = savedFontSize;
+    fontSizeValue.textContent = `${savedFontSize}px`;
+    
+    // 更新字體大小的函數
+    function updateFontSize() {
+        const size = fontSizeSlider.value;
+        fontSizeValue.textContent = `${size}px`;
+        
+        // 更新所有卡片的字體大小
+        document.querySelectorAll('.flashcard .english').forEach(element => {
+            element.style.fontSize = `${size}px`;
+        });
+        
+        document.querySelectorAll('.flashcard .chinese').forEach(element => {
+            element.style.fontSize = `${Math.floor(size * 0.75)}px`; // 中文字體稍小
+        });
+        
+        // 保存到本地存儲
+        localStorage.setItem('fontSize', size);
+    }
+
+    // 監聽字體大小滑軌變化
+    fontSizeSlider.addEventListener('input', updateFontSize);
+    
+    // 在創建卡片時應用字體大小
+    const originalCreateCardElement = createCardElement;
+    createCardElement = function(card, index) {
+        const cardElement = originalCreateCardElement(card, index);
+        const fontSize = fontSizeSlider.value;
+        
+        cardElement.querySelector('.english').style.fontSize = `${fontSize}px`;
+        cardElement.querySelector('.chinese').style.fontSize = `${Math.floor(fontSize * 0.75)}px`;
+        
+        return cardElement;
+    }
+    
+    // 初始化字體大小
+    updateFontSize();
 }); 

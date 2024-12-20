@@ -68,6 +68,7 @@ button:hover {
     margin-bottom: 10px;
     word-break: break-all;
     white-space: pre-wrap;
+    transition: font-size 0.3s ease;
 }
 
 .flashcard .chinese {
@@ -76,6 +77,7 @@ button:hover {
     display: none;
     word-break: break-all;
     white-space: pre-wrap;
+    transition: font-size 0.3s ease;
 }
 
 .flashcard.flipped .chinese {
@@ -336,4 +338,56 @@ body.dark-mode .checkbox-container {
 /* 隱藏控制面板的樣式 */
 .control-panel.hidden {
     display: none;
-} 
+}
+
+/* 夜間模式下的字體大小滑軌樣式 */
+body.dark-mode #fontSizeSlider::-webkit-slider-thumb {
+    background: #4CAF50;
+}
+
+body.dark-mode #fontSizeSlider::-moz-range-thumb {
+    background: #4CAF50;
+}
+
+/* 播放按鈕樣式 */
+.play-btn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background-color: transparent;
+    color: #666;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    border: none;
+    padding: 0;
+    opacity: 0.6;
+    transition: all 0.3s ease;
+}
+
+.play-btn:hover {
+    opacity: 1;
+    background-color: rgba(0, 0, 0, 0.1);
+    transform: scale(1.1);
+}
+
+/* 夜間模式下的播放按鈕樣式 */
+body.dark-mode .play-btn {
+    color: #fff;
+}
+
+body.dark-mode .play-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 調整刪除按鈕的位置，避免與播放按鈕重疊 */
+.delete-btn {
+    top: 10px;
+    right: 10px;
+}
+  
