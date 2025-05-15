@@ -594,7 +594,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.error('❌ 讀取失敗:', error);
             console.error('詳細錯誤:', error.message);
-            alert('讀取失���: ' + error.message);
+            alert('讀取失敗: ' + error.message);
         } finally {
             testLoadBtn.textContent = '測試讀取';
             testLoadBtn.disabled = false;
@@ -646,4 +646,204 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 初始化字體大小
     updateFontSize();
+
+    // 獲取新增的播放控制元素
+    const playAllButton = document.getElementById('playAllCards');
+    const chineseRepeatInput = document.getElementById('chineseRepeat');
+    const englishRepeatInput = document.getElementById('englishRepeat');
+    const infiniteLoopCheckbox = document.getElementById('infiniteLoop');
+    const randomPlayCheckbox = document.getElementById('randomPlay');
+    
+    // 播放狀態變數
+    let isPlaying = false;
+    let currentPlayingIndex = 0;
+    let playbackCards = [];
+    
+    // 從本地存儲加載播放設置
+    const savedChineseRepeat = localStorage.getItem('chineseRepeat') || '1';
+    const savedEnglishRepeat = localStorage.getItem('englishRepeat') || '1';
+    const savedInfiniteLoop = localStorage.getItem('infiniteLoop') === 'true';
+    const savedRandomPlay = localStorage.getItem('randomPlay') === 'true';
+    
+    // 應用保存的設置
+    chineseRepeatInput.value = savedChineseRepeat;
+    englishRepeatInput.value = savedEnglishRepeat;
+    infiniteLoopCheckbox.checked = savedInfiniteLoop;
+    randomPlayCheckbox.checked = savedRandomPlay;
+    
+    // 保存播放設置
+    chineseRepeatInput.addEventListener('change', () => {
+        localStorage.setItem('chineseRepeat', chineseRepeatInput.value);
+    });
+    
+    englishRepeatInput.addEventListener('change', () => {
+        localStorage.setItem('englishRepeat', englishRepeatInput.value);
+    });
+    
+    infiniteLoopCheckbox.addEventListener('change', () => {
+        localStorage.setItem('infiniteLoop', infiniteLoopCheckbox.checked);
+    });
+    
+    randomPlayCheckbox.addEventListener('change', () => {
+        localStorage.setItem('randomPlay', randomPlayCheckbox.checked);
+    });
+    
+    // 播放所有單字卡功能
+    playAllButton.addEventListener('click', () => {
+        if (isPlaying) {
+            stopPlayback();
+        } else {
+            startPlayback();
+        }
+    });
+    
+    // 開始播放所有單字卡
+    function startPlayback() {
+        if (flashcards.length === 0) {
+            alert('沒有單字卡可播放！');
+            return;
+        }
+        
+        isPlaying = true;
+        playAllButton.textContent = '停止播放';
+        playAllButton.classList.add('playing');
+        
+        // 準備播放卡片順序
+        playbackCards = [...flashcards];
+        if (randomPlayCheckbox.checked) {
+            playbackCards = shuffleArray([...playbackCards]);
+        }
+        
+        currentPlayingIndex = 0;
+        playNextCard();
+    }
+    
+    // 停止播放
+    function stopPlayback() {
+        isPlaying = false;
+        playAllButton.textContent = '播放所有單字卡';
+        playAllButton.classList.remove('playing');
+        responsiveVoice.cancel(); // 停止當前語音播放
+    }
+    
+    // 播放下一張卡片
+    function playNextCard() {
+        if (!isPlaying) return;
+        
+        if (currentPlayingIndex >= playbackCards.length) {
+            // 檢查是否開啓無限循環
+            if (infiniteLoopCheckbox.checked) {
+                currentPlayingIndex = 0;
+                // 如果開啓了亂數播放，重新洗牌
+                if (randomPlayCheckbox.checked) {
+                    playbackCards = shuffleArray([...flashcards]);
+                }
+                playNextCard();
+            } else {
+                stopPlayback();
+            }
+            return;
+        }
+        
+        const card = playbackCards[currentPlayingIndex];
+        
+        // 高亮顯示當前播放的卡片
+        highlightCard(currentPlayingIndex);
+        
+        // 獲取重複次數
+        const chineseRepeat = parseInt(chineseRepeatInput.value) || 1;
+        const englishRepeat = parseInt(englishRepeatInput.value) || 1;
+        
+        // 先播放中文，再播放英文
+        playChinese(card, chineseRepeat, () => {
+            playEnglish(card, englishRepeat, () => {
+                // 播放完畢，繼續下一張
+                currentPlayingIndex++;
+                setTimeout(() => {
+                    playNextCard();
+                }, 800); // 卡片之間間隔800毫秒
+            });
+        });
+    }
+    
+    // 播放中文
+    function playChinese(card, repeatCount, callback) {
+        let count = 0;
+        
+        function repeat() {
+            if (count < repeatCount && isPlaying) {
+                responsiveVoice.speak(card.chinese, "Chinese Female", {
+                    pitch: 1,
+                    rate: 0.9,
+                    volume: 1,
+                    onend: () => {
+                        count++;
+                        // 播放間隔
+                        setTimeout(() => {
+                            if (isPlaying) repeat();
+                        }, 300);
+                    }
+                });
+            } else if (isPlaying && callback) {
+                // 間隔後播放英文
+                setTimeout(callback, 500);
+            }
+        }
+        
+        repeat();
+    }
+    
+    // 播放英文
+    function playEnglish(card, repeatCount, callback) {
+        let count = 0;
+        
+        function repeat() {
+            if (count < repeatCount && isPlaying) {
+                responsiveVoice.speak(card.english, "UK English Female", {
+                    pitch: 1,
+                    rate: 0.9,
+                    volume: 1,
+                    onend: () => {
+                        count++;
+                        // 播放間隔
+                        setTimeout(() => {
+                            if (isPlaying) repeat();
+                        }, 300);
+                    }
+                });
+            } else if (isPlaying && callback) {
+                callback();
+            }
+        }
+        
+        repeat();
+    }
+    
+    // 高亮顯示當前播放的卡片
+    function highlightCard(index) {
+        const cards = document.querySelectorAll('.flashcard');
+        
+        // 首先移除所有卡片的高亮
+        cards.forEach(card => {
+            card.classList.remove('playing-card');
+        });
+        
+        // 滾動到視圖並高亮
+        if (cards[index]) {
+            cards[index].classList.add('playing-card');
+            cards[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    // 添加CSS規則到現有樣式表
+    const styleSheet = document.styleSheets[0];
+    const rules = [
+        ".playing-card { box-shadow: 0 0 15px #2196F3; border: 2px solid #2196F3; animation: highlight-pulse 1.5s infinite; }",
+        "@keyframes highlight-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }",
+        "body.dark-mode .playing-card { box-shadow: 0 0 15px #4CAF50; border: 2px solid #4CAF50; }"
+    ];
+    
+    rules.forEach(rule => {
+        styleSheet.insertRule(rule, styleSheet.cssRules.length);
+    });
 }); 

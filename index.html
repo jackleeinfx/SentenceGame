@@ -35,6 +35,7 @@
         </div>
 
         <div class="control-panel">
+            <h2 class="settings-title">設置欄</h2>
             <div class="slider-container">
                 <label>卡片寬度：</label>
                 <input type="range" id="sizeSlider" min="150" max="800" value="250">
@@ -44,6 +45,30 @@
                 <label>字體大小：</label>
                 <input type="range" id="fontSizeSlider" min="12" max="48" value="24">
                 <span id="fontSizeValue">24px</span>
+            </div>
+            <div class="playback-controls">
+                <h3>語音播放設置</h3>
+                <div class="playback-settings">
+                    <div class="repeat-container">
+                        <label>中文播放次數：</label>
+                        <input type="number" id="chineseRepeat" min="1" max="10" value="1">
+                    </div>
+                    <div class="repeat-container">
+                        <label>英文播放次數：</label>
+                        <input type="number" id="englishRepeat" min="1" max="10" value="1">
+                    </div>
+                    <div class="playback-options">
+                        <label>
+                            <input type="checkbox" id="infiniteLoop">
+                            無限循環播放
+                        </label>
+                        <label>
+                            <input type="checkbox" id="randomPlay">
+                            亂數播放順序
+                        </label>
+                    </div>
+                    <button id="playAllCards" class="play-all-btn">播放所有單字卡</button>
+                </div>
             </div>
             <div class="display-mode">
                 <label>顯示模式：</label>
