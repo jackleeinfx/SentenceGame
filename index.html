@@ -36,7 +36,7 @@
                     <span class="star" data-rating="4">★</span>
                     <span class="star" data-rating="5">★</span>
                 </div>
-                <span id="ratingValue">0星</span>
+                <span id="ratingValue">3星</span>
             </div>
             <div class="button-group">
                 <button id="addCard">新增單字卡</button>
@@ -55,6 +55,33 @@
                 <input type="range" id="fontSizeSlider" min="12" max="48" value="24">
                 <span id="fontSizeValue">24px</span>
             </div>
+            <div class="slider-container">
+                <label>卡片高度：</label>
+                <input type="range" id="heightSlider" min="50" max="200" value="120">
+                <span id="heightValue">120px</span>
+            </div>
+            <div class="input-container">
+                <label>播放次數：</label>
+                <input type="number" id="playCountInput" min="1" max="10" value="2">
+                <span>次</span>
+            </div>
+            <div class="input-container">
+                <label>播放間隔：</label>
+                <input type="number" id="playIntervalInput" min="1" max="30" value="3">
+                <span>秒</span>
+            </div>
+            <div class="display-mode" style="margin-top: 8px;">
+                <label>測試按鈕：</label>
+                <button id="testSave" class="mode-btn">測試存儲</button>
+                <button id="testLoad" class="mode-btn">測試讀取</button>
+                <button id="testDarkMode" class="mode-btn">測試夜間模式</button>
+                <button id="testCardHeight" class="mode-btn">測試卡片高度</button>
+                <button id="testSupabaseConnection" class="mode-btn">診斷雲端連線</button>
+            </div>
+        </div>
+
+        <!-- 顯示和排序控制區（不受隱藏設置控制） -->
+        <div class="control-section">
             <div class="display-mode">
                 <label>顯示模式：</label>
                 <button id="showAll" class="mode-btn active">顯示全部</button>
@@ -62,19 +89,18 @@
                 <button id="showChinese" class="mode-btn">只顯示中文</button>
                 <button id="editMode" class="mode-btn">編輯模式</button>
                 <button id="darkMode" class="mode-btn">夜間模式</button>
-                <button id="shuffleCards" class="mode-btn">隨機排列</button>
             </div>
             <div class="display-mode" style="margin-top: 8px;">
                 <label>排序方式：</label>
                 <button id="sortByTime" class="mode-btn active">最新在前</button>
                 <button id="sortByRating" class="mode-btn">按星級</button>
                 <button id="sortByAlphabet" class="mode-btn">按字母</button>
+                <button id="shuffleCards" class="mode-btn">隨機排列</button>
             </div>
             <div class="display-mode" style="margin-top: 8px;">
-                <label>測試按鈕：</label>
-                <button id="testSave" class="mode-btn">測試存儲</button>
-                <button id="testLoad" class="mode-btn">測試讀取</button>
-                <button id="testDarkMode" class="mode-btn">測試夜間模式</button>
+                <label>播放控制：</label>
+                <button id="playAllCards" class="mode-btn">開始播放</button>
+                <button id="stopPlayback" class="mode-btn" disabled>停止播放</button>
             </div>
         </div>
 

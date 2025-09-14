@@ -52,7 +52,7 @@ button:hover {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     cursor: pointer;
     width: 250px;
-    min-height: 150px;
+    min-height: 120px;
     transition: all 0.3s ease;
     flex-grow: 0;
     flex-shrink: 0;
@@ -63,7 +63,6 @@ button:hover {
 }
 
 .flashcard .english {
-    font-size: 24px;
     margin-bottom: 10px;
     word-break: break-all;
     white-space: pre-wrap;
@@ -71,7 +70,6 @@ button:hover {
 }
 
 .flashcard .chinese {
-    font-size: 18px;
     color: #666;
     display: none;
     word-break: break-all;
@@ -84,6 +82,14 @@ button:hover {
 }
 
 .control-panel {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.control-section {
     background-color: white;
     padding: 20px;
     border-radius: 8px;
@@ -105,6 +111,31 @@ button:hover {
 
 .slider-container input[type="range"] {
     flex: 1;
+}
+
+.input-container {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.input-container label {
+    white-space: nowrap;
+}
+
+.input-container input[type="number"] {
+    width: 80px;
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.input-container span {
+    font-size: 14px;
+    color: #666;
 }
 
 #sizeValue {
@@ -148,6 +179,13 @@ button:hover {
     border-color: #4CAF50;
 }
 
+.mode-btn:disabled {
+    background-color: #e0e0e0;
+    color: #999;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 /* 修改卡片顯示模式的相關樣式 */
 .flashcard.mode-english .chinese,
 .flashcard.mode-chinese .english {
@@ -163,8 +201,8 @@ button:hover {
     position: absolute;
     top: 8px;
     right: 8px;
-    background-color: #ff4444;
-    color: white;
+    background-color: transparent;
+    color: #666;
     width: 28px;
     height: 28px;
     border-radius: 6px;
@@ -176,17 +214,19 @@ button:hover {
     font-weight: bold;
     border: none;
     z-index: 1;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     transition: all 0.2s ease;
+    opacity: 0.6;
 }
 
 .delete-btn:hover {
-    background-color: #cc0000;
+    background-color: #ff4444;
+    color: white;
+    opacity: 1;
     transform: scale(1.05);
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.flashcard.edit-mode .delete-btn {
+.flashcard .delete-btn {
     display: flex;
 }
 
@@ -198,6 +238,7 @@ body.dark-mode {
 
 body.dark-mode .add-card-section,
 body.dark-mode .control-panel,
+body.dark-mode .control-section,
 body.dark-mode .flashcard {
     background-color: #2d2d2d;
     color: #ffffff;
@@ -210,6 +251,16 @@ body.dark-mode .add-card-section input {
     color: #ffffff;
 }
 
+body.dark-mode .input-container input[type="number"] {
+    background-color: #1a1a1a;
+    border-color: #404040;
+    color: #ffffff;
+}
+
+body.dark-mode .input-container span {
+    color: #b3b3b3;
+}
+
 body.dark-mode .mode-btn {
     background-color: #404040;
     color: #ffffff;
@@ -219,6 +270,11 @@ body.dark-mode .mode-btn {
 body.dark-mode .mode-btn.active {
     background-color: #4CAF50;
     border-color: #4CAF50;
+}
+
+body.dark-mode .mode-btn:disabled {
+    background-color: #333;
+    color: #666;
 }
 
 body.dark-mode .flashcard .chinese {
@@ -353,42 +409,6 @@ body.dark-mode #fontSizeSlider::-moz-range-thumb {
     background: #4CAF50;
 }
 
-/* 播放按鈕樣式 */
-.play-btn {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    background-color: transparent;
-    color: #666;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 14px;
-    border: none;
-    padding: 0;
-    opacity: 0.6;
-    transition: all 0.3s ease;
-}
-
-.play-btn:hover {
-    opacity: 1;
-    background-color: rgba(0, 0, 0, 0.1);
-    transform: scale(1.1);
-}
-
-/* 夜間模式下的播放按鈕樣式 */
-body.dark-mode .play-btn {
-    color: #fff;
-}
-
-body.dark-mode .play-btn:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
 /* 刪除按鈕位置已在上方定義 */
 
 /* 星級評分樣式 */
@@ -444,13 +464,13 @@ body.dark-mode .play-btn:hover {
     color: #ddd;
 }
 
-/* 編輯模式下的星級 */
-.flashcard.edit-mode .card-rating .star {
+/* 星級始終可點擊 */
+.flashcard .card-rating .star {
     cursor: pointer;
     font-size: 16px;
 }
 
-.flashcard.edit-mode .card-rating .star:hover {
+.flashcard .card-rating .star:hover {
     color: #ffed4e;
 }
 
@@ -471,12 +491,12 @@ body.dark-mode .card-rating .star.empty {
 
 /* 夜間模式下的刪除按鈕樣式 */
 body.dark-mode .delete-btn {
-    background-color: #ff5555;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+    color: #ccc;
+    background-color: transparent;
 }
 
 body.dark-mode .delete-btn:hover {
-    background-color: #dd3333;
-    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+    background-color: #ff5555;
+    color: white;
 }
   
