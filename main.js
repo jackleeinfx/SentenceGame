@@ -576,11 +576,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 卡片雙擊事件（播放語音）
         div.addEventListener('dblclick', (e) => {
             e.stopPropagation();
-            responsiveVoice.speak(card.english, "US English Male", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1
-            });
+            speakText(card.english);
         });
 
         return div;
@@ -1076,6 +1072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const testDarkModeBtn = document.getElementById('testDarkMode');
     const testCardHeightBtn = document.getElementById('testCardHeight');
     const testSupabaseConnectionBtn = document.getElementById('testSupabaseConnection');
+    const testVoiceBtn = document.getElementById('testVoice');
 
     // 測試存儲功能
     testSaveBtn.addEventListener('click', async () => {
@@ -1340,7 +1337,93 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('===== Supabase 連線診斷結束 =====');
         }
     });
+    
+    // 語音功能診斷
+    testVoiceBtn.addEventListener('click', async () => {
+        console.log('===== 開始診斷語音功能 =====');
+        testVoiceBtn.textContent = '診斷中...';
+        testVoiceBtn.disabled = true;
 
+        try {
+            const testText = "Hello, this is a voice test";
+            
+            // 檢測設備和瀏覽器
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isChrome = /Chrome/.test(navigator.userAgent);
+            const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+            
+            let diagnosticInfo = `設備檢測結果:\n`;
+            diagnosticInfo += `- 移動設備: ${isMobile ? '是' : '否'}\n`;
+            diagnosticInfo += `- iOS 設備: ${isIOS ? '是' : '否'}\n`;
+            diagnosticInfo += `- Chrome 瀏覽器: ${isChrome ? '是' : '否'}\n`;
+            diagnosticInfo += `- Safari 瀏覽器: ${isSafari ? '是' : '否'}\n\n`;
+            
+            // 檢測 Web Speech API 支援
+            const speechSupport = 'speechSynthesis' in window;
+            diagnosticInfo += `Web Speech API 支援: ${speechSupport ? '是' : '否'}\n`;
+            
+            if (speechSupport) {
+                const voices = window.speechSynthesis.getVoices();
+                diagnosticInfo += `可用語音數量: ${voices.length}\n`;
+                
+                if (voices.length > 0) {
+                    const englishVoices = voices.filter(voice => voice.lang.startsWith('en'));
+                    diagnosticInfo += `英語語音數量: ${englishVoices.length}\n`;
+                    
+                    if (englishVoices.length > 0) {
+                        diagnosticInfo += `\n可用的英語語音:\n`;
+                        englishVoices.slice(0, 5).forEach(voice => {
+                            diagnosticInfo += `- ${voice.name} (${voice.lang})\n`;
+                        });
+                        if (englishVoices.length > 5) {
+                            diagnosticInfo += `... 還有 ${englishVoices.length - 5} 個語音\n`;
+                        }
+                    }
+                }
+            }
+            
+            // 檢測 ResponsiveVoice 支援
+            const rvSupport = typeof responsiveVoice !== 'undefined';
+            diagnosticInfo += `\nResponsiveVoice 支援: ${rvSupport ? '是' : '否'}\n`;
+            
+            if (rvSupport) {
+                const rvVoiceSupport = responsiveVoice.voiceSupport();
+                diagnosticInfo += `ResponsiveVoice 語音支援: ${rvVoiceSupport ? '是' : '否'}\n`;
+            }
+            
+            console.log('診斷資訊:', diagnosticInfo);
+            
+            // 顯示診斷結果
+            alert(`🔍 語音功能診斷結果:\n\n${diagnosticInfo}\n\n現在將進行語音測試...`);
+            
+            // 進行實際語音測試
+            console.log('開始語音測試...');
+            await new Promise((resolve) => {
+                speakText(testText, () => {
+                    console.log('語音測試完成');
+                    resolve();
+                });
+                
+                // 5秒後強制結束測試
+                setTimeout(() => {
+                    console.log('語音測試超時');
+                    resolve();
+                }, 5000);
+            });
+            
+            alert(`✅ 語音診斷完成！\n\n如果您聽到了測試語音"${testText}"，說明語音功能正常。\n\n如果沒有聽到或品質不佳，建議：\n1. 在 Safari 瀏覽器中嘗試\n2. 檢查設備音量和靜音開關\n3. 確保網路連線正常`);
+            
+        } catch (error) {
+            console.error('語音診斷錯誤:', error);
+            alert(`❌ 語音診斷出錯: ${error.message}`);
+        } finally {
+            testVoiceBtn.textContent = '診斷語音功能';
+            testVoiceBtn.disabled = false;
+            console.log('===== 語音功能診斷結束 =====');
+        }
+    });
+    
     // 字體大小滑軌元素已在前面定義
 
     // 更新字體大小的函數
@@ -1414,6 +1497,182 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
+    // 智能語音播放函數 - 支持移動設備優化
+    function speakText(text, callback = null) {
+        console.log(`🔊 準備播放語音: "${text}"`);
+        
+        // 檢測是否為移動設備
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isChrome = /Chrome/.test(navigator.userAgent);
+        const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+        
+        console.log(`📱 設備檢測: mobile=${isMobile}, iOS=${isIOS}, Chrome=${isChrome}, Safari=${isSafari}`);
+        
+        // 優先使用原生 Web Speech API (在支援的瀏覽器上品質更好)
+        if ('speechSynthesis' in window) {
+            console.log('🎯 使用原生 Web Speech API');
+            
+            // 取消任何正在播放的語音
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // 針對不同設備優化設定
+            if (isIOS) {
+                // iOS 設備優化設定
+                utterance.lang = 'en-US';
+                utterance.rate = 0.8;  // 稍慢一點，更清晰
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                console.log('🍎 應用 iOS 優化設定');
+            } else if (isMobile) {
+                // 其他移動設備優化設定
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                console.log('📱 應用移動設備優化設定');
+            } else {
+                // 桌面設備設定
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                console.log('🖥️ 應用桌面設備設定');
+            }
+            
+            // 嘗試選擇更好的語音
+            const voices = window.speechSynthesis.getVoices();
+            console.log(`🎤 可用語音數量: ${voices.length}`);
+            
+            if (voices.length > 0) {
+                // 優先選擇順序：英語男聲 -> 英語女聲 -> 預設
+                const preferredVoices = [
+                    'Alex',           // macOS 英語男聲
+                    'Daniel',         // iOS 英語男聲
+                    'Fred',           // macOS 英語男聲
+                    'Microsoft David Desktop', // Windows 英語男聲
+                    'Google US English Male',  // Android 英語男聲
+                ];
+                
+                let selectedVoice = null;
+                
+                // 首先嘗試找到偏好的語音
+                for (const preferredName of preferredVoices) {
+                    selectedVoice = voices.find(voice => 
+                        voice.name.includes(preferredName) && voice.lang.startsWith('en')
+                    );
+                    if (selectedVoice) {
+                        console.log(`✅ 找到偏好語音: ${selectedVoice.name}`);
+                        break;
+                    }
+                }
+                
+                // 如果沒找到偏好語音，選擇任何英語語音
+                if (!selectedVoice) {
+                    selectedVoice = voices.find(voice => 
+                        voice.lang.startsWith('en-US') || voice.lang.startsWith('en')
+                    );
+                    if (selectedVoice) {
+                        console.log(`🔄 使用備選英語語音: ${selectedVoice.name}`);
+                    }
+                }
+                
+                if (selectedVoice) {
+                    utterance.voice = selectedVoice;
+                    console.log(`🎵 選定語音: ${selectedVoice.name} (${selectedVoice.lang})`);
+                } else {
+                    console.log('⚠️ 未找到合適的英語語音，使用系統預設');
+                }
+            } else {
+                console.log('⚠️ 無可用語音列表，使用系統預設');
+            }
+            
+            utterance.onstart = () => {
+                console.log('🎵 語音開始播放');
+            };
+            
+            utterance.onend = () => {
+                console.log('✅ 語音播放完成');
+                if (callback) callback();
+            };
+            
+            utterance.onerror = (event) => {
+                console.error('❌ 語音播放錯誤:', event.error);
+                // 如果原生 API 失敗，回退到 ResponsiveVoice
+                fallbackToResponsiveVoice(text, callback);
+            };
+            
+            window.speechSynthesis.speak(utterance);
+            
+        } else if (typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
+            // 回退到 ResponsiveVoice
+            console.log('🔄 回退到 ResponsiveVoice');
+            fallbackToResponsiveVoice(text, callback);
+        } else {
+            console.error('❌ 無可用的語音播放方式');
+            if (callback) callback();
+        }
+    }
+    
+    // ResponsiveVoice 回退函數
+    function fallbackToResponsiveVoice(text, callback = null) {
+        console.log('📢 使用 ResponsiveVoice 播放');
+        
+        // 檢測設備類型選擇最佳語音
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        let voiceName = "US English Male";
+        
+        if (isMobile) {
+            // 移動設備上使用更通用的語音選項
+            const mobileVoices = [
+                "US English Male",
+                "UK English Male", 
+                "US English Female",
+                "UK English Female"
+            ];
+            
+            // 檢查哪些語音可用
+            for (const voice of mobileVoices) {
+                if (responsiveVoice.isPlaying() !== undefined) { // 簡單的可用性檢查
+                    voiceName = voice;
+                    break;
+                }
+            }
+            console.log(`📱 移動設備選用語音: ${voiceName}`);
+        }
+        
+        responsiveVoice.speak(text, voiceName, {
+            pitch: 1,
+            rate: 0.9,
+            volume: 1,
+            onend: callback || (() => {}),
+            onerror: (error) => {
+                console.error('ResponsiveVoice 錯誤:', error);
+                if (callback) callback();
+            }
+        });
+    }
+    
+    // 停止所有語音播放
+    function stopAllSpeech() {
+        console.log('🛑 停止所有語音播放');
+        
+        // 停止原生 Web Speech API
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            console.log('✅ 已停止原生語音播放');
+        }
+        
+        // 停止 ResponsiveVoice
+        if (typeof responsiveVoice !== 'undefined') {
+            responsiveVoice.cancel();
+            console.log('✅ 已停止 ResponsiveVoice 播放');
+        }
+    }
+
     // 持續播放功能
     async function playAllCards() {
         if (isPlaying) return;
@@ -1475,18 +1734,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
             
-            responsiveVoice.speak(card.english, "US English Male", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1,
-                onend: () => {
-                    playedCount++;
-                    if (playedCount < count) {
-                        // 短暫間隔後重複播放同一個單字
-                        setTimeout(playOnce, 500);
-                    } else {
-                        if (callback) callback();
-                    }
+            speakText(card.english, () => {
+                playedCount++;
+                if (playedCount < count) {
+                    // 短暫間隔後重複播放同一個單字
+                    setTimeout(playOnce, 500);
+                } else {
+                    if (callback) callback();
                 }
             });
         }
@@ -1506,9 +1760,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // 停止語音播放
-        if (typeof responsiveVoice !== 'undefined') {
-            responsiveVoice.cancel();
-        }
+        stopAllSpeech();
         
         playAllCardsBtn.disabled = false;
         playAllCardsBtn.textContent = '開始播放';
