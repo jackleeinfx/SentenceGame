@@ -45,6 +45,11 @@
         </div>
 
         <div class="control-panel">
+            <div class="display-mode" style="margin-bottom: 10px;">
+                <label>播放控制：</label>
+                <button id="playAllCards" class="mode-btn">開始播放</button>
+                <button id="stopPlayback" class="mode-btn" disabled>停止播放</button>
+            </div>
             <div class="slider-container">
                 <label>卡片寬度：</label>
                 <input type="range" id="sizeSlider" min="150" max="800" value="250">
@@ -70,14 +75,6 @@
                 <input type="number" id="playIntervalInput" min="1" max="30" value="3">
                 <span>秒</span>
             </div>
-            <div class="display-mode" style="margin-top: 8px;">
-                <label>測試按鈕：</label>
-                <button id="testSave" class="mode-btn">測試存儲</button>
-                <button id="testLoad" class="mode-btn">測試讀取</button>
-                <button id="testDarkMode" class="mode-btn">測試夜間模式</button>
-                <button id="testCardHeight" class="mode-btn">測試卡片高度</button>
-                <button id="testSupabaseConnection" class="mode-btn">診斷雲端連線</button>
-            </div>
         </div>
 
         <!-- 顯示和排序控制區（不受隱藏設置控制） -->
@@ -96,11 +93,6 @@
                 <button id="sortByRating" class="mode-btn">按星級</button>
                 <button id="sortByAlphabet" class="mode-btn">按字母</button>
                 <button id="shuffleCards" class="mode-btn">隨機排列</button>
-            </div>
-            <div class="display-mode" style="margin-top: 8px;">
-                <label>播放控制：</label>
-                <button id="playAllCards" class="mode-btn">開始播放</button>
-                <button id="stopPlayback" class="mode-btn" disabled>停止播放</button>
             </div>
         </div>
 
