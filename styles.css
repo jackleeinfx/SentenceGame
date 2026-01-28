@@ -169,8 +169,8 @@ button:hover {
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 13px;
-    height: 28px;
-    line-height: 1;
+    min-height: 28px;
+    line-height: 1.2;
 }
 
 .mode-btn.active {
@@ -314,7 +314,7 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 
 .translate-btn {
     padding: 10px 15px;
-    height: 42px; /* 與輸入框同高 */
+    min-height: 42px; /* 與輸入框同高 */
     background-color: #2196F3;
     color: white;
     border: none;
@@ -498,5 +498,12 @@ body.dark-mode .delete-btn {
 body.dark-mode .delete-btn:hover {
     background-color: #ff5555;
     color: white;
+}
+
+/* Prevent auto-zoom on mobile */
+@media screen and (max-width: 768px) {
+    input, select, textarea {
+        font-size: 16px !important;
+    }
 }
   
