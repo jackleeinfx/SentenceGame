@@ -60,6 +60,22 @@
             </div>
         </div>
 
+        <div class="article-search-panel">
+            <div class="article-search-controls">
+                <label class="wiki-lang-label">
+                    <select id="articleSource" class="wiki-lang-select">
+                        <option value="news_zh" selected>Google 新聞（繁中・較新）</option>
+                        <option value="news_en">Google 新聞（英文・較新）</option>
+                        <option value="grokipedia">Grokipedia 全文（輸入條目 slug，如 Artificial_intelligence）</option>
+                    </select>
+                </label>
+                <input type="text" id="articleSearchInput" class="article-search-input" placeholder="新聞：輸入關鍵字；Grokipedia：輸入條目名" autocomplete="off">
+                <button type="button" id="articleSearchBtn" class="input-action-btn">搜尋</button>
+            </div>
+            <p class="article-search-hint">新聞：搜尋後只顯示標題與日期；點選一則後才在下方組合 RSS 摘要（約 1000 字內）。RSS 經 allorigins → Jina → corsproxy 依序嘗試（各約 6.5 秒逾時）。請用本機伺服器開啟（勿用 file://）。Grokipedia：搜尋後點標題看預覽。一鍵存入後播放仍唸「英文」欄位。</p>
+            <div id="articleSearchResults" class="article-search-results" aria-live="polite"></div>
+        </div>
+
         <!-- 顯示和排序控制區（不受隱藏設置控制） -->
         <div class="control-section hidden">
             <div class="display-mode">
