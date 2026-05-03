@@ -24,17 +24,16 @@
         <div class="add-card-section">
             <div class="input-group">
                 <div class="input-row">
-                    <input type="text" id="englishWord" placeholder="請輸入中文或英文">
+                    <textarea id="englishWord" placeholder="請輸入中文或英文" rows="1"></textarea>
                     <button id="pasteInputBtn" class="input-action-btn" type="button">一鍵貼上</button>
                 </div>
                 <div class="input-row">
-                    <input type="text" id="chineseTranslation" placeholder="系統自動翻譯結果" readonly>
+                    <textarea id="chineseTranslation" placeholder="系統自動翻譯結果" rows="1" readonly></textarea>
                     <button id="copyTranslationBtn" class="input-action-btn" type="button">一鍵複製</button>
                 </div>
             </div>
             <div class="button-group">
                 <div class="rating-input-group">
-                    <label>星級評分：</label>
                     <div class="star-rating" id="newCardRating">
                         <span class="star" data-rating="1">★</span>
                         <span class="star" data-rating="2">★</span>

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hideSettingsCheckbox = document.getElementById('hideSettings');
     const addCardSection = document.querySelector('.add-card-section');
     const controlPanel = document.querySelector('.control-panel');
+    const controlSection = document.querySelector('.control-section');
 
     // 設置隱藏功能的事件監聽器
     if (hideAddCardCheckbox) {
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         hideSettingsCheckbox.addEventListener('change', () => {
             const isChecked = hideSettingsCheckbox.checked;
             controlPanel.classList.toggle('hidden', isChecked);
+            controlSection.classList.toggle('hidden', isChecked);
             saveSetting('hideSettings', isChecked);
         });
     }
@@ -69,6 +71,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     let cardsOffset = 0;
     const CARDS_PAGE_SIZE = 30;
 
+    function autoResizeTextarea(textarea) {
+        if (!textarea) return;
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+
+    function setFieldValue(field, value) {
+        field.value = value;
+        autoResizeTextarea(field);
+    }
+
     // 設置管理
     const defaultSettings = {
         playCount: '2',
@@ -76,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         displayMode: 'all',
         sortMode: 'time',
         hideAddCard: 'false',
-        hideSettings: 'false',
+        hideSettings: 'true',
         darkMode: 'false'
     };
 
@@ -224,6 +237,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (settings.hideSettings === 'true') {
             hideSettingsCheckbox.checked = true;
             controlPanel.classList.add('hidden');
+            controlSection.classList.add('hidden');
+        } else {
+            controlPanel.classList.remove('hidden');
+            controlSection.classList.remove('hidden');
         }
         
         // 應用夜間模式
@@ -567,8 +584,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // 先同步欄位顯示順序，確保英文在前、中文在後
-            englishInput.value = normalized.english;
-            chineseInput.value = normalized.chinese;
+            setFieldValue(englishInput, normalized.english);
+            setFieldValue(chineseInput, normalized.chinese);
 
             const newCard = { 
                 english: normalized.english, 
@@ -598,8 +615,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             displayCards();
             
             // 清空輸入框和重置星級為3星
-            englishInput.value = '';
-            chineseInput.value = '';
+            setFieldValue(englishInput, '');
+            setFieldValue(chineseInput, '');
             currentRating = 3;
             updateStarDisplay(3, 'active');
             ratingValue.textContent = '3星';
@@ -873,16 +890,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function autoTranslateFromSourceInput() {
         const sourceText = englishInput.value.trim();
         if (!sourceText) {
-            chineseInput.value = '';
+            setFieldValue(chineseInput, '');
             updateTranslateButtonState();
             return;
         }
 
         const normalized = await normalizeCardInput(sourceText, '');
         if (isChineseText(sourceText)) {
-            chineseInput.value = normalized.english || '';
+            setFieldValue(chineseInput, normalized.english || '');
         } else {
-            chineseInput.value = normalized.chinese || '';
+            setFieldValue(chineseInput, normalized.chinese || '');
         }
         updateTranslateButtonState();
     }
@@ -896,13 +913,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             if (!sourceText) {
-                chineseInput.value = '';
+                setFieldValue(chineseInput, '');
             } else {
                 const normalized = await normalizeCardInput(sourceText, '');
                 if (isChineseText(sourceText)) {
-                    chineseInput.value = normalized.english || '';
+                    setFieldValue(chineseInput, normalized.english || '');
                 } else {
-                    chineseInput.value = normalized.chinese || '';
+                    setFieldValue(chineseInput, normalized.chinese || '');
                 }
             }
 
@@ -927,6 +944,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     englishInput.addEventListener('input', () => {
+        autoResizeTextarea(englishInput);
         updateTranslateButtonState();
         if (translationDebounceTimer) {
             clearTimeout(translationDebounceTimer);
@@ -950,7 +968,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            englishInput.value = text.trim();
+            setFieldValue(englishInput, text.trim());
             await autoTranslateFromSourceInput();
         } catch (error) {
             console.error('貼上失敗:', error);
@@ -973,6 +991,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             alert('複製失敗，請稍後再試');
         }
     });
+
+    autoResizeTextarea(englishInput);
+    autoResizeTextarea(chineseInput);
 
     // Supabase 相关函数
     async function saveToSupabase() {

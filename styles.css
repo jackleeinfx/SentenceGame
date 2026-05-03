@@ -23,7 +23,8 @@ body {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.add-card-section input {
+.add-card-section input,
+.add-card-section textarea {
     width: 100%;
     padding: 10px;
     margin: 10px 0;
@@ -32,7 +33,17 @@ body {
     font-size: 16px;
 }
 
-.add-card-section input[readonly] {
+.add-card-section textarea {
+    min-height: 42px;
+    resize: none;
+    overflow-y: hidden;
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.add-card-section input[readonly],
+.add-card-section textarea[readonly] {
     background-color: #f5f5f5;
     color: #666;
     cursor: not-allowed;
@@ -179,8 +190,10 @@ body.dark-mode .playback-row input[type="number"] {
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 13px;
-    height: 28px;
-    line-height: 1;
+    min-height: 30px;
+    height: auto;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .mode-btn.active {
@@ -255,13 +268,15 @@ body.dark-mode .flashcard {
     box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-body.dark-mode .add-card-section input {
+body.dark-mode .add-card-section input,
+body.dark-mode .add-card-section textarea {
     background-color: #1a1a1a;
     border-color: #404040;
     color: #ffffff;
 }
 
-body.dark-mode .add-card-section input[readonly] {
+body.dark-mode .add-card-section input[readonly],
+body.dark-mode .add-card-section textarea[readonly] {
     background-color: #222;
     color: #b3b3b3;
 }
@@ -334,7 +349,8 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
     width: 100%;
 }
 
-.input-row input {
+.input-row input,
+.input-row textarea {
     flex: 1;
 }
 
@@ -451,6 +467,10 @@ body.dark-mode .input-action-btn:hover {
     display: none;
 }
 
+.control-section.hidden {
+    display: none;
+}
+
 /* 刪除按鈕位置已在上方定義 */
 
 /* 星級評分樣式 */
@@ -560,6 +580,17 @@ body.dark-mode .delete-btn:hover {
 
     .flashcard {
         width: 100%;
+    }
+
+    .control-section .display-mode {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .control-section .mode-btn {
+        font-size: 12px;
+        padding: 8px 10px;
+        min-height: 34px;
     }
 }
   
