@@ -22,7 +22,6 @@
         </div>
 
         <div class="add-card-section">
-            <h2>新增單字卡</h2>
             <div class="input-group">
                 <div class="input-row">
                     <input type="text" id="englishWord" placeholder="請輸入中文或英文">
@@ -33,30 +32,31 @@
                     <button id="copyTranslationBtn" class="input-action-btn" type="button">一鍵複製</button>
                 </div>
             </div>
-            <div class="rating-input-group">
-                <label>星級評分：</label>
-                <div class="star-rating" id="newCardRating">
-                    <span class="star" data-rating="1">★</span>
-                    <span class="star" data-rating="2">★</span>
-                    <span class="star" data-rating="3">★</span>
-                    <span class="star" data-rating="4">★</span>
-                    <span class="star" data-rating="5">★</span>
-                </div>
-                <span id="ratingValue">3星</span>
-            </div>
             <div class="button-group">
+                <div class="rating-input-group">
+                    <label>星級評分：</label>
+                    <div class="star-rating" id="newCardRating">
+                        <span class="star" data-rating="1">★</span>
+                        <span class="star" data-rating="2">★</span>
+                        <span class="star" data-rating="3">★</span>
+                        <span class="star" data-rating="4">★</span>
+                        <span class="star" data-rating="5">★</span>
+                    </div>
+                    <span id="ratingValue">3星</span>
+                </div>
                 <button id="addCard">新增單字卡</button>
                 <button id="translateBtn" class="translate-btn">翻譯</button>
             </div>
         </div>
 
         <div class="control-panel">
-            <div class="input-container">
+            <div class="display-mode playback-row" style="margin-top: 0;">
+                <button id="playAllCards" class="mode-btn">開始播放</button>
+                <button id="stopPlayback" class="mode-btn" disabled>停止播放</button>
+                <button id="shuffleCards" class="mode-btn">隨機排列</button>
                 <label>播放次數：</label>
                 <input type="number" id="playCountInput" min="1" max="10" value="2">
                 <span>次</span>
-            </div>
-            <div class="input-container">
                 <label>播放間隔：</label>
                 <input type="number" id="playIntervalInput" min="1" max="30" value="3">
                 <span>秒</span>
@@ -78,12 +78,6 @@
                 <button id="sortByTime" class="mode-btn active">最新在前</button>
                 <button id="sortByRating" class="mode-btn">按星級</button>
                 <button id="sortByAlphabet" class="mode-btn">按字母</button>
-                <button id="shuffleCards" class="mode-btn">隨機排列</button>
-            </div>
-            <div class="display-mode" style="margin-top: 8px;">
-                <label>播放控制：</label>
-                <button id="playAllCards" class="mode-btn">開始播放</button>
-                <button id="stopPlayback" class="mode-btn" disabled>停止播放</button>
             </div>
         </div>
 

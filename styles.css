@@ -153,6 +153,25 @@ button:hover {
     white-space: nowrap;
 }
 
+.playback-row {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+}
+
+.playback-row input[type="number"] {
+    width: 72px;
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+}
+
+body.dark-mode .playback-row input[type="number"] {
+    background-color: #1a1a1a;
+    border-color: #404040;
+    color: #ffffff;
+}
+
 .mode-btn {
     background-color: #f0f0f0;
     color: #333;
@@ -356,6 +375,9 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
     display: flex;
     gap: 10px;
     margin-top: 10px;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .input-group {
@@ -437,6 +459,11 @@ body.dark-mode .input-action-btn:hover {
     align-items: center;
     gap: 10px;
     margin: 10px 0;
+    justify-content: flex-end;
+}
+
+.button-group .rating-input-group {
+    margin: 0;
 }
 
 .star-rating {
