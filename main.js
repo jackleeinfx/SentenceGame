@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hideAddCardCheckbox = document.getElementById('hideAddCard');
     const hideSettingsCheckbox = document.getElementById('hideSettings');
     const addCardSection = document.querySelector('.add-card-section');
-    const controlPanel = document.querySelector('.control-panel');
     const controlSection = document.querySelector('.control-section');
 
     // 設置隱藏功能的事件監聽器
@@ -28,9 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (hideSettingsCheckbox) {
         hideSettingsCheckbox.addEventListener('change', () => {
             const isChecked = hideSettingsCheckbox.checked;
-            controlPanel.classList.toggle('hidden', isChecked);
             controlSection.classList.toggle('hidden', isChecked);
-            saveSetting('hideSettings', isChecked);
         });
     }
 
@@ -56,7 +53,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const playCountInput = document.getElementById('playCountInput');
     const playIntervalInput = document.getElementById('playIntervalInput');
     const playAllCardsBtn = document.getElementById('playAllCards');
-    const stopPlaybackBtn = document.getElementById('stopPlayback');
     let isEditMode = false;
     let currentRating = 3;
     let currentSortMode = 'time';
@@ -89,7 +85,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         displayMode: 'all',
         sortMode: 'time',
         hideAddCard: 'false',
-        hideSettings: 'true',
         darkMode: 'false'
     };
 
@@ -234,14 +229,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             addCardSection.classList.add('hidden');
         }
         
-        if (settings.hideSettings === 'true') {
-            hideSettingsCheckbox.checked = true;
-            controlPanel.classList.add('hidden');
-            controlSection.classList.add('hidden');
-        } else {
-            controlPanel.classList.remove('hidden');
-            controlSection.classList.remove('hidden');
-        }
+        // hideSettings 為臨時 UI 狀態，不從本地/雲端回讀；每次進站預設隱藏
+        hideSettingsCheckbox.checked = true;
+        controlSection.classList.add('hidden');
         
         // 應用夜間模式
         const shouldBeDarkMode = settings.darkMode === 'true';
@@ -276,7 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             star.addEventListener('click', () => {
                 currentRating = index + 1;
                 updateStarDisplay(currentRating, 'active');
-                ratingValue.textContent = `${currentRating}星`;
+                ratingValue.textContent = `${currentRating}`;
             });
         });
         
@@ -284,12 +274,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         newCardRating.addEventListener('dblclick', () => {
             currentRating = 0;
             updateStarDisplay(0, 'active');
-            ratingValue.textContent = '0星';
+            ratingValue.textContent = '0';
         });
         
         // 初始化顯示3星
         updateStarDisplay(currentRating, 'active');
-        ratingValue.textContent = `${currentRating}星`;
+        ratingValue.textContent = `${currentRating}`;
     }
 
     function updateStarDisplay(rating, type) {
@@ -619,7 +609,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             setFieldValue(chineseInput, '');
             currentRating = 3;
             updateStarDisplay(3, 'active');
-            ratingValue.textContent = '3星';
+            ratingValue.textContent = '3';
             
             // 更新翻譯按鈕狀態
             updateTranslateButtonState();
@@ -1165,7 +1155,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 持續播放功能
     async function playAllCards() {
-        if (isPlaying) return;
+        if (isPlaying) {
+            stopPlayback();
+            return;
+        }
         
         const sortedCards = sortCards(currentSortMode);
         if (sortedCards.length === 0) {
@@ -1175,9 +1168,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         isPlaying = true;
         currentPlayIndex = 0;
-        playAllCardsBtn.disabled = true;
-        playAllCardsBtn.textContent = '播放中...';
-        stopPlaybackBtn.disabled = false;
+        playAllCardsBtn.textContent = '停止播放';
+        playAllCardsBtn.classList.add('is-stopping');
         
         console.log('🎵 開始播放所有單字卡');
         
@@ -1261,10 +1253,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         playAllCardsBtn.disabled = false;
         playAllCardsBtn.textContent = '開始播放';
-        stopPlaybackBtn.disabled = true;
+        playAllCardsBtn.classList.remove('is-stopping');
     }
     
     // 綁定播放控制按鈕事件
     playAllCardsBtn.addEventListener('click', playAllCards);
-    stopPlaybackBtn.addEventListener('click', stopPlayback);
 }); 

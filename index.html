@@ -16,7 +16,7 @@
                 隱藏新增單詞卡
             </label>
             <label>
-                <input type="checkbox" id="hideSettings">
+                <input type="checkbox" id="hideSettings" checked>
                 隱藏設置
             </label>
         </div>
@@ -41,7 +41,7 @@
                         <span class="star" data-rating="4">★</span>
                         <span class="star" data-rating="5">★</span>
                     </div>
-                    <span id="ratingValue">3星</span>
+                    <span id="ratingValue">3</span>
                 </div>
                 <button id="addCard">新增單字卡</button>
                 <button id="translateBtn" class="translate-btn">翻譯</button>
@@ -51,7 +51,6 @@
         <div class="control-panel">
             <div class="display-mode playback-row" style="margin-top: 0;">
                 <button id="playAllCards" class="mode-btn">開始播放</button>
-                <button id="stopPlayback" class="mode-btn" disabled>停止播放</button>
                 <button id="shuffleCards" class="mode-btn">隨機排列</button>
                 <label>播放次數：</label>
                 <input type="number" id="playCountInput" min="1" max="10" value="2">
@@ -63,7 +62,7 @@
         </div>
 
         <!-- 顯示和排序控制區（不受隱藏設置控制） -->
-        <div class="control-section">
+        <div class="control-section hidden">
             <div class="display-mode">
                 <label>顯示模式：</label>
                 <button id="showAll" class="mode-btn active">顯示全部</button>

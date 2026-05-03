@@ -202,6 +202,18 @@ body.dark-mode .playback-row input[type="number"] {
     border-color: #4CAF50;
 }
 
+#playAllCards {
+    background-color: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+#playAllCards.is-stopping {
+    background-color: #e53935;
+    color: white;
+    border-color: #e53935;
+}
+
 .mode-btn:disabled {
     background-color: #e0e0e0;
     color: #999;
@@ -302,6 +314,16 @@ body.dark-mode .mode-btn.active {
     border-color: #4CAF50;
 }
 
+body.dark-mode #playAllCards {
+    background-color: #4CAF50;
+    border-color: #4CAF50;
+}
+
+body.dark-mode #playAllCards.is-stopping {
+    background-color: #e53935;
+    border-color: #e53935;
+}
+
 body.dark-mode .mode-btn:disabled {
     background-color: #333;
     color: #666;
@@ -393,7 +415,7 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
     margin-top: 10px;
     justify-content: flex-end;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .input-group {
@@ -484,6 +506,10 @@ body.dark-mode .input-action-btn:hover {
 
 .button-group .rating-input-group {
     margin: 0;
+}
+
+#ratingValue {
+    display: none;
 }
 
 .star-rating {
@@ -591,6 +617,45 @@ body.dark-mode .delete-btn:hover {
         font-size: 12px;
         padding: 8px 10px;
         min-height: 34px;
+    }
+
+    .button-group {
+        gap: 6px;
+        justify-content: flex-end;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .button-group .rating-input-group {
+        gap: 4px;
+    }
+
+    .button-group .star {
+        font-size: 16px;
+    }
+
+    .button-group button {
+        padding: 8px 10px;
+        font-size: 12px;
+        min-height: 34px;
+    }
+
+    .playback-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+
+    .playback-row input[type="number"] {
+        width: 52px;
+        padding: 4px 6px;
+        font-size: 12px;
+    }
+
+    .playback-row label,
+    .playback-row span {
+        font-size: 12px;
     }
 }
   
