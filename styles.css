@@ -27,7 +27,7 @@ body {
 .add-card-section textarea {
     width: 100%;
     padding: 10px;
-    margin: 10px 0;
+    margin: 0;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 16px;
@@ -167,6 +167,11 @@ button:hover {
 .playback-row {
     flex-wrap: wrap;
     gap: 8px 10px;
+}
+
+.playback-actions,
+.playback-settings {
+    justify-content: flex-end;
 }
 
 .playback-row input[type="number"] {
@@ -361,13 +366,13 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 2px;
 }
 
 .input-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 4px;
     width: 100%;
 }
 
@@ -392,7 +397,6 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 
 .translate-btn {
     padding: 10px 15px;
-    height: 42px; /* 與輸入框同高 */
     background-color: #2196F3;
     color: white;
     border: none;
@@ -421,7 +425,7 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 .input-group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 2px;
 }
 
 .translate-btn {
@@ -593,6 +597,23 @@ body.dark-mode .delete-btn:hover {
     color: white;
 }
 
+/* 統一按鈕尺寸 */
+.mode-btn,
+.translate-btn,
+.input-action-btn,
+#addCard {
+    min-height: 36px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.button-group .rating-input-group {
+    min-height: 36px;
+}
+
 @media (max-width: 768px) {
     .container {
         max-width: 100%;
@@ -626,6 +647,14 @@ body.dark-mode .delete-btn:hover {
         -webkit-overflow-scrolling: touch;
     }
 
+    .input-group {
+        gap: 2px;
+    }
+
+    .input-row {
+        gap: 4px;
+    }
+
     .button-group .rating-input-group {
         gap: 4px;
     }
@@ -634,10 +663,13 @@ body.dark-mode .delete-btn:hover {
         font-size: 16px;
     }
 
-    .button-group button {
-        padding: 8px 10px;
+    .mode-btn,
+    .translate-btn,
+    .input-action-btn,
+    #addCard {
+        min-height: 32px;
+        padding: 6px 10px;
         font-size: 12px;
-        min-height: 34px;
     }
 
     .playback-row {
