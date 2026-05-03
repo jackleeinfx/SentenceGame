@@ -1004,14 +1004,103 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`;
     }
 
-    function stripHtml(html) {
-        if (!html) return '';
-        const d = document.createElement('div');
-        d.innerHTML = html;
-        return (d.textContent || d.innerText || '').replace(/\s+/g, ' ').trim();
+    function normalizeWhitespace(s) {
+        return (s || '').replace(/\s+/g, ' ').trim();
     }
 
-    /** 只解析欄位，不在此處 stripHtml（點選後再處理摘要，減少初次搜尋工作量） */
+    /** Google News RSS 的 description 經扁平化後常重複標題；盡量移除 */
+    function dedupeRepeatedTitle(text, title) {
+        if (!title || !text) {
+            return normalizeWhitespace(text);
+        }
+        let t = normalizeWhitespace(text);
+        const esc = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        t = t.replace(new RegExp(esc, 'gi'), ' ').replace(/\s+/g, ' ').trim();
+        return t;
+    }
+
+    /**
+     * 從 Google News RSS 的 description HTML 抽出可讀摘要（避免整段只有標題重複）。
+     */
+    function extractGoogleNewsSnippet(descriptionHtml, itemTitle) {
+        if (!descriptionHtml || !String(descriptionHtml).trim()) {
+            return '';
+        }
+        const raw = String(descriptionHtml);
+        if (!raw.includes('<')) {
+            return clipForStorage(dedupeRepeatedTitle(raw, itemTitle), NEWS_SNIPPET_MAX);
+        }
+        const doc = new DOMParser().parseFromString(raw, 'text/html');
+        const candidates = [];
+
+        doc.querySelectorAll('font').forEach((el) => {
+            const sz = el.getAttribute('size');
+            if (String(sz) === '-1') {
+                const t = normalizeWhitespace(el.textContent || '');
+                if (t.length >= 12) {
+                    candidates.push(t);
+                }
+            }
+        });
+
+        doc.querySelectorAll('p, li, td').forEach((el) => {
+            const t = normalizeWhitespace(el.textContent || '');
+            if (t.length >= 20 && t.length < 2500 && !/^https?:\/\//i.test(t)) {
+                candidates.push(t);
+            }
+        });
+
+        candidates.sort((a, b) => b.length - a.length);
+        for (const chunk of candidates) {
+            const cleaned = dedupeRepeatedTitle(chunk, itemTitle).replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim();
+            if (cleaned.length >= 20) {
+                return clipForStorage(cleaned, NEWS_SNIPPET_MAX);
+            }
+        }
+
+        let full = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
+        full = dedupeRepeatedTitle(full, itemTitle).replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim();
+        return clipForStorage(full, NEWS_SNIPPET_MAX);
+    }
+
+    /**
+     * 對 Google 新聞連結用 Jina Reader／allorigins 取可讀正文（RSS 常無長摘要時使用）。
+     */
+    async function fetchNewsPageReaderText(pageUrl) {
+        if (!pageUrl) {
+            return '';
+        }
+        const enc = encodeURIComponent(pageUrl);
+        const attemptUrls = [
+            `https://r.jina.ai/${enc}`,
+            `https://api.allorigins.win/raw?url=${enc}`
+        ];
+        for (const u of attemptUrls) {
+            try {
+                const r = await fetchWithTimeout(u, {}, 11000);
+                if (!r.ok) {
+                    continue;
+                }
+                let t = await r.text();
+                t = t.replace(/^\uFEFF/, '').trim();
+                if (t.length < 100) {
+                    continue;
+                }
+                if (t.startsWith('Title:')) {
+                    const cut = t.indexOf('\n\n');
+                    if (cut > 0 && cut < 400) {
+                        t = t.slice(cut + 2).trim();
+                    }
+                }
+                return clipForStorage(t, ARTICLE_CARD_MAX);
+            } catch {
+                /* try next */
+            }
+        }
+        return '';
+    }
+
+    /** 只解析欄位；摘要改在點選後由 extractGoogleNewsSnippet 處理 */
     function parseGoogleNewsRssRawItems(xmlString) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(xmlString, 'text/xml');
@@ -1030,13 +1119,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return { title, link, pubDate, descriptionRaw, sourceName };
             })
             .filter((x) => x.title);
-    }
-
-    function buildNewsExtractFromItem(it) {
-        const snippet = clipForStorage(stripHtml(it.descriptionRaw || ''), NEWS_SNIPPET_MAX);
-        const srcLine = it.sourceName ? `來源：${it.sourceName}` : '';
-        const bodyParts = [it.title, snippet, srcLine, it.link ? `連結：${it.link}` : ''].filter(Boolean);
-        return clipForStorage(bodyParts.join('\n\n'), ARTICLE_CARD_MAX);
     }
 
     async function searchGoogleNews(langKey, query) {
@@ -1058,7 +1140,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             sourceName: it.sourceName,
             newsLang: langKey,
             kind: 'news',
-            extract: null
+            extract: null,
+            newsSnippetDisplay: null
         }));
     }
 
@@ -1141,9 +1224,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function ensureNewsExtract(item) {
-        if (item.kind === 'news' && item.descriptionRaw != null && !item.extract) {
-            item.extract = buildNewsExtractFromItem(item);
+        if (item.kind !== 'news' || item.descriptionRaw == null || item.extract) {
+            return;
         }
+        const snippet = extractGoogleNewsSnippet(item.descriptionRaw || '', item.title);
+        item.newsSnippetDisplay = snippet;
+        const srcLine = item.sourceName ? `來源：${item.sourceName}` : '';
+        const bodyParts = [item.title, snippet, srcLine, item.link ? `連結：${item.link}` : ''].filter(Boolean);
+        item.extract = clipForStorage(bodyParts.join('\n\n'), ARTICLE_CARD_MAX);
     }
 
     function fillArticleDetailPanel(detailPanel, item) {
@@ -1155,11 +1243,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         head.textContent = item.title;
         detailPanel.appendChild(head);
 
-        ensureNewsExtract(item);
-
         const body = document.createElement('div');
         body.className = 'article-detail-body';
-        body.textContent = item.extract || '（此則無 RSS 摘要，請用「開啟原文」閱讀。）';
         detailPanel.appendChild(body);
 
         const actions = document.createElement('div');
@@ -1185,6 +1270,71 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         actions.appendChild(saveBtn);
         detailPanel.appendChild(actions);
+
+        const urlKey = item.url || item.title || '';
+        detailPanel.dataset.detailKey = urlKey;
+
+        if (item.kind === 'grokipedia') {
+            body.textContent = item.extract || '（無內文）';
+            return;
+        }
+
+        ensureNewsExtract(item);
+
+        function setNewsBodyText(txt, isLoading) {
+            if (detailPanel.dataset.detailKey !== urlKey) {
+                return;
+            }
+            body.textContent = txt;
+            if (isLoading) {
+                body.classList.add('article-detail-body--loading');
+            } else {
+                body.classList.remove('article-detail-body--loading');
+            }
+        }
+
+        const snippet = item.newsSnippetDisplay || '';
+        if (snippet.length >= 45) {
+            setNewsBodyText(snippet, false);
+            return;
+        }
+
+        if (item.url) {
+            setNewsBodyText(snippet || '正在載入原文摘要以供預覽…', true);
+            fetchNewsPageReaderText(item.url)
+                .then((extra) => {
+                    if (detailPanel.dataset.detailKey !== urlKey) {
+                        return;
+                    }
+                    if (extra && extra.length > 80) {
+                        item.newsSnippetDisplay = extra;
+                        item.extract = clipForStorage(
+                            [item.title, extra, item.sourceName ? `來源：${item.sourceName}` : '', `連結：${item.url}`]
+                                .filter(Boolean)
+                                .join('\n\n'),
+                            ARTICLE_CARD_MAX
+                        );
+                        setNewsBodyText(extra, false);
+                    } else {
+                        setNewsBodyText(
+                            snippet ||
+                                '此則在 RSS 中僅含標題與連結；請點「開啟原文」閱讀完整報導。',
+                            false
+                        );
+                    }
+                })
+                .catch(() => {
+                    if (detailPanel.dataset.detailKey !== urlKey) {
+                        return;
+                    }
+                    setNewsBodyText(
+                        snippet || '無法載入原文預覽；請點「開啟原文」閱讀。',
+                        false
+                    );
+                });
+        } else {
+            setNewsBodyText(snippet || '（無連結可載入原文）', false);
+        }
     }
 
     function renderNewsPickList(items) {

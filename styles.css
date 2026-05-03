@@ -786,6 +786,11 @@ body.dark-mode .delete-btn:hover {
     overflow-y: auto;
 }
 
+.article-detail-body--loading {
+    color: #666;
+    font-style: italic;
+}
+
 .article-detail-actions {
     margin-top: 12px;
     display: flex;
@@ -874,6 +879,10 @@ body.dark-mode .article-detail-head {
 
 body.dark-mode .article-detail-body {
     color: #ccc;
+}
+
+body.dark-mode .article-detail-body--loading {
+    color: #9e9e9e;
 }
 
 /* 統一按鈕尺寸 */
