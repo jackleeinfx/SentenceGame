@@ -70,9 +70,9 @@
                 </label>
                 <input type="text" id="articleSearchInput" class="article-search-input" placeholder="輸入新聞關鍵字" autocomplete="off">
                 <button type="button" id="articleSearchBtn" class="input-action-btn">搜尋</button>
-                <button type="button" id="articleTrendingBtn" class="input-action-btn">隨機今日熱門</button>
+                <button type="button" id="articleTrendingBtn" class="input-action-btn">隨機美加热門</button>
             </div>
-            <p class="article-search-hint">搜尋或「隨機今日熱門」後只顯示標題；點選一則會重新向原文連結請求內文（約 1000 字內）再顯示。RSS 經 allorigins → Jina → corsproxy；內文經 Jina／allorigins／corsproxy。請用本機伺服器或 GitHub Pages 開啟（勿用 file://）。一鍵存入後播放仍唸「英文」欄位。</p>
+            <p class="article-search-hint">關鍵字搜尋仍依左側繁中／英文。隨機美加热門固定為美國或加拿大、財經股票／科技／政治／國際等英文主題合併挑選。點選標題後以 Jina 讀內文（Google 新聞內部連結不走一般代理，以免整頁 HTML）；失敗則退回 RSS 摘要。請用本機伺服器或 GitHub Pages 開啟。一鍵存入後播放仍唸「英文」欄位。</p>
             <div id="articleSearchResults" class="article-search-results" aria-live="polite"></div>
         </div>
 

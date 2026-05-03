@@ -63,8 +63,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ARTICLE_CARD_MAX = 1000;
     const NEWS_RSS_FETCH = 10;
     const NEWS_DISPLAY = 8;
-    /** 頭條 RSS 先取較多筆再隨機挑選 */
-    const NEWS_TRENDING_POOL = 26;
+    /** 隨機熱門：多個美／加主題 RSS 合併後去重、洗牌 */
+    const NEWS_TRENDING_FEEDS_PER_FETCH = 4;
+    const NEWS_TRENDING_ITEMS_PER_FEED = 8;
     const NEWS_TRENDING_SHOW = 6;
     const NEWS_SNIPPET_MAX = 360;
     const CORS_TIMEOUT_MS = 9000;
@@ -1058,19 +1059,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         return lines.join('\n').trim();
     }
 
+    function isGoogleNewsArticleUrl(url) {
+        try {
+            const h = new URL(url).hostname;
+            return h === 'news.google.com' || h.endsWith('.news.google.com');
+        } catch {
+            return false;
+        }
+    }
+
+    /** Jina 有時會回「標題 + 換行 + Google 新聞整頁 HTML」，只保留 HTML 之前的可讀段 */
+    function truncateBeforeHtmlShell(t) {
+        const s = String(t || '');
+        const m = s.search(/<!doctype\s+html|<html[\s>]/i);
+        if (m > 40) {
+            return s.slice(0, m).trim();
+        }
+        return s.trim();
+    }
+
+    function readerExtractLooksLikeGoogleShell(innerText) {
+        const s = (innerText || '').slice(0, 600);
+        if (innerText && innerText.length > 12000 && innerText.includes('google-site-verification')) {
+            return true;
+        }
+        if (/news\.google\.com\/rss\/articles/i.test(s) && innerText.length > 4000) {
+            return true;
+        }
+        return false;
+    }
+
     /**
-     * 向 Google 新聞條目連結重新請求可讀正文（點選標題後專用）。
+     * 向新聞條目連結請求可讀正文。
+     * news.google.com 的內部連結若經 allorigins/corsproxy 常得到整頁 SPA HTML，故只走 Jina Reader。
      */
     async function fetchNewsPageReaderText(pageUrl) {
         if (!pageUrl) {
             return '';
         }
         const enc = encodeURIComponent(pageUrl);
-        const attemptUrls = [
-            `https://r.jina.ai/${enc}`,
-            `https://api.allorigins.win/raw?url=${enc}`,
-            `https://corsproxy.io/?${enc}`
-        ];
+        const isGNews = isGoogleNewsArticleUrl(pageUrl);
+        const attemptUrls = isGNews
+            ? [`https://r.jina.ai/${enc}`]
+            : [`https://r.jina.ai/${enc}`, `https://api.allorigins.win/raw?url=${enc}`, `https://corsproxy.io/?${enc}`];
+
         for (const u of attemptUrls) {
             try {
                 const r = await fetchWithTimeout(u, {}, 12000);
@@ -1079,17 +1111,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 let t = await r.text();
                 t = stripReaderResponseNoise(t);
-                if (t.startsWith('<!DOCTYPE') || /^<html[\s>]/i.test(t)) {
-                    const doc = new DOMParser().parseFromString(t, 'text/html');
-                    t = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
-                } else if (t.startsWith('Title:')) {
+
+                if (t.startsWith('Title:')) {
                     const cut = t.indexOf('\n\n');
                     if (cut > 0 && cut < 500) {
                         t = t.slice(cut + 2).trim();
                     }
                 }
+
+                t = truncateBeforeHtmlShell(t);
                 t = stripReaderResponseNoise(t);
-                if (t.length < 60) {
+
+                if (/^<!doctype\s+html|<html[\s>]/i.test(t.trim())) {
+                    const doc = new DOMParser().parseFromString(t, 'text/html');
+                    const inner = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
+                    if (readerExtractLooksLikeGoogleShell(inner) || inner.length < 100) {
+                        continue;
+                    }
+                    t = inner;
+                }
+
+                t = stripReaderResponseNoise(t);
+                if (t.length < 45) {
+                    continue;
+                }
+                if (/<script[^>]*>/i.test(t) && t.length > 5000) {
                     continue;
                 }
                 return clipForStorage(t, ARTICLE_CARD_MAX);
@@ -1100,6 +1146,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         return '';
     }
 
+    /**
+     * 美國／加拿大、財經股票／科技／政治／國際 等主題的 Google News RSS（英文）。
+     * 每次隨機抽幾個主題合併後去重。
+     */
+    const US_CA_TRENDING_RSS_FEEDS = [
+        'https://news.google.com/rss/search?q=stock+market+NASDAQ+NYSE+Wall+Street&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=TSX+Toronto+stock+market+Canada+investing&hl=en-CA&gl=CA&ceid=CA:en',
+        'https://news.google.com/rss/search?q=Federal+Reserve+interest+rates+inflation+banking+finance&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=Bank+of+Canada+economy+fiscal+budget&hl=en-CA&gl=CA&ceid=CA:en',
+        'https://news.google.com/rss/search?q=technology+AI+semiconductor+Silicon+Valley&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=Canada+technology+innovation+AI&hl=en-CA&gl=CA&ceid=CA:en',
+        'https://news.google.com/rss/search?q=US+politics+Congress+White+House+Washington+DC&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=Canada+politics+Parliament+Ottawa+federal&hl=en-CA&gl=CA&ceid=CA:en',
+        'https://news.google.com/rss/search?q=United+Nations+NATO+international+summit+geopolitics&hl=en-US&gl=US&ceid=US:en',
+        'https://news.google.com/rss/search?q=Canada+foreign+affairs+international+relations&hl=en-CA&gl=CA&ceid=CA:en'
+    ];
+
     /** 點選新聞後：重新抓正文，失敗再退回 RSS description 解析 */
     async function fetchFullNewsBodyForItem(item) {
         let body = '';
@@ -1107,6 +1170,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             body = await fetchNewsPageReaderText(item.url);
         }
         body = stripReaderResponseNoise(body || '');
+        body = truncateBeforeHtmlShell(body);
+        if (/<!doctype|<html[\s>]/i.test(body)) {
+            body = '';
+        }
         if (item.title) {
             body = dedupeRepeatedTitle(body, item.title);
         }
@@ -1161,16 +1228,31 @@ document.addEventListener('DOMContentLoaded', async () => {
         return a;
     }
 
-    /** Google News 頭條 RSS（依地區），再隨機抽幾則當「今日熱門」 */
-    async function fetchTrendingNewsItems(langKey) {
-        const rssUrl =
-            langKey === 'news_en'
-                ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'
-                : 'https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh';
-        const xml = await corsFetchRssXml(rssUrl);
-        let rows = parseGoogleNewsRssRawItems(xml);
-        rows = shuffleArray(rows).slice(0, NEWS_TRENDING_POOL);
-        return rows.slice(0, NEWS_TRENDING_SHOW).map((it) => mapGoogleNewsRssItem(it, langKey));
+    /** 隨機熱門：美／加、財經股票／科技／政治／國際等主題 RSS 合併去重 */
+    async function fetchTrendingNewsItems() {
+        const picks = shuffleArray(US_CA_TRENDING_RSS_FEEDS.slice()).slice(0, NEWS_TRENDING_FEEDS_PER_FETCH);
+        const batches = await Promise.all(
+            picks.map(async (rssUrl) => {
+                try {
+                    const xml = await corsFetchRssXml(rssUrl);
+                    return parseGoogleNewsRssRawItems(xml).slice(0, NEWS_TRENDING_ITEMS_PER_FEED);
+                } catch {
+                    return [];
+                }
+            })
+        );
+        let merged = batches.flat();
+        const seen = new Set();
+        merged = merged.filter((row) => {
+            const k = row.link || row.title;
+            if (!k || seen.has(k)) {
+                return false;
+            }
+            seen.add(k);
+            return true;
+        });
+        merged = shuffleArray(merged);
+        return merged.slice(0, NEWS_TRENDING_SHOW).map((it) => mapGoogleNewsRssItem(it, 'news_en'));
     }
 
     async function searchGoogleNews(langKey, query) {
@@ -1280,6 +1362,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderNewsPickList(items, hintLine) {
         articleSearchResults.innerHTML = '';
+
+        if (!items.length) {
+            const empty = document.createElement('p');
+            empty.className = 'article-results-empty';
+            empty.textContent = '未取得任何新聞，請稍後再試。';
+            articleSearchResults.appendChild(empty);
+            return;
+        }
 
         const hint = document.createElement('p');
         hint.className = 'article-results-pick-hint';
@@ -1439,7 +1529,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function runRandomTrendingNews() {
-        const langKey = articleSourceSelect.value === 'news_en' ? 'news_en' : 'news_zh';
         const disableTrending = () => {
             if (articleTrendingBtn) {
                 articleTrendingBtn.disabled = true;
@@ -1458,13 +1547,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (articleTrendingBtn) {
             articleTrendingBtn.textContent = '載入中…';
         }
-        articleSearchResults.innerHTML = '<p class="article-results-loading">載入今日頭條並隨機挑選…</p>';
+        articleSearchResults.innerHTML = '<p class="article-results-loading">載入美／加財經科技政治等主題並隨機挑選…</p>';
 
         try {
-            const items = await fetchTrendingNewsItems(langKey);
+            const items = await fetchTrendingNewsItems();
             renderNewsPickList(
                 items,
-                '以下為 Google 今日頭條中隨機挑選的幾則（每次不同）。點選一則後會重新向原文連結請求內文；若失敗請用「開啟原文」。'
+                '以下為美國或加拿大相關主題（財經股票、科技、政治、國際等）隨機合併挑選；每次不同。點選後以 Jina 讀取內文（news.google.com 不經一般代理以免整頁 HTML）；失敗時會退回 RSS 摘要或請用「開啟原文」。'
             );
         } catch (e) {
             console.error(e);
@@ -1478,7 +1567,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             enableTrending();
             if (articleTrendingBtn) {
-                articleTrendingBtn.textContent = prevTrending || '隨機今日熱門';
+                articleTrendingBtn.textContent = prevTrending || '隨機美加热門';
             }
         }
     }
