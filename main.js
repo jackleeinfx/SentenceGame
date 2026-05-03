@@ -56,12 +56,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const articleSourceSelect = document.getElementById('articleSource');
     const articleSearchInput = document.getElementById('articleSearchInput');
     const articleSearchBtn = document.getElementById('articleSearchBtn');
+    const articleTrendingBtn = document.getElementById('articleTrendingBtn');
     const articleSearchResults = document.getElementById('articleSearchResults');
 
     /** 一鍵存入與列表內文上限（字元） */
     const ARTICLE_CARD_MAX = 1000;
     const NEWS_RSS_FETCH = 10;
     const NEWS_DISPLAY = 8;
+    /** 頭條 RSS 先取較多筆再隨機挑選 */
+    const NEWS_TRENDING_POOL = 26;
+    const NEWS_TRENDING_SHOW = 6;
     const NEWS_SNIPPET_MAX = 360;
     const CORS_TIMEOUT_MS = 9000;
     /** 僅拉 RSS 標題列時用較短逾時，失敗快換下一個代理 */
@@ -956,35 +960,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         throw lastErr || new Error('代理皆失敗');
     }
 
-    /**
-     * 非 RSS 的跨域文字（如 Grokipedia JSON）用一般逾時。
-     */
-    async function corsFetchText(targetUrl) {
-        const enc = encodeURIComponent(targetUrl);
-        const urls = [
-            `https://api.allorigins.win/raw?url=${enc}`,
-            `https://corsproxy.io/?${enc}`
-        ];
-        let lastErr = null;
-        for (const proxyUrl of urls) {
-            try {
-                const r = await fetchWithTimeout(proxyUrl);
-                if (!r.ok) {
-                    throw new Error('代理 HTTP ' + r.status);
-                }
-                let text = await r.text();
-                text = text.replace(/^\uFEFF/, '');
-                if (!text || text.trim().length < 40) {
-                    throw new Error('回應過短');
-                }
-                return text;
-            } catch (e) {
-                lastErr = e;
-            }
-        }
-        throw lastErr || new Error('代理皆失敗');
-    }
-
     function friendlyArticleSearchError(e) {
         if (e && e.name === 'AbortError') {
             return new Error('連線逾時（' + CORS_TIMEOUT_MS / 1000 + ' 秒），請再試一次');
@@ -1063,8 +1038,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         return clipForStorage(full, NEWS_SNIPPET_MAX);
     }
 
+    function stripReaderResponseNoise(text) {
+        let t = String(text || '').replace(/^\uFEFF/, '').trim();
+        if (t.startsWith('```')) {
+            const firstNl = t.indexOf('\n');
+            const close = t.lastIndexOf('```');
+            if (firstNl > 0 && close > firstNl) {
+                t = t.slice(firstNl + 1, close).trim();
+            }
+        }
+        const lines = t.split('\n');
+        const dropLine = (line) => {
+            const s = line.trimStart();
+            return /^(Title:|URL Source:|Published Time:|Markdown Content:|={3,})/i.test(s);
+        };
+        while (lines.length && (lines[0].trim() === '' || dropLine(lines[0]))) {
+            lines.shift();
+        }
+        return lines.join('\n').trim();
+    }
+
     /**
-     * 對 Google 新聞連結用 Jina Reader／allorigins 取可讀正文（RSS 常無長摘要時使用）。
+     * 向 Google 新聞條目連結重新請求可讀正文（點選標題後專用）。
      */
     async function fetchNewsPageReaderText(pageUrl) {
         if (!pageUrl) {
@@ -1073,24 +1068,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         const enc = encodeURIComponent(pageUrl);
         const attemptUrls = [
             `https://r.jina.ai/${enc}`,
-            `https://api.allorigins.win/raw?url=${enc}`
+            `https://api.allorigins.win/raw?url=${enc}`,
+            `https://corsproxy.io/?${enc}`
         ];
         for (const u of attemptUrls) {
             try {
-                const r = await fetchWithTimeout(u, {}, 11000);
+                const r = await fetchWithTimeout(u, {}, 12000);
                 if (!r.ok) {
                     continue;
                 }
                 let t = await r.text();
-                t = t.replace(/^\uFEFF/, '').trim();
-                if (t.length < 100) {
-                    continue;
-                }
-                if (t.startsWith('Title:')) {
+                t = stripReaderResponseNoise(t);
+                if (t.startsWith('<!DOCTYPE') || /^<html[\s>]/i.test(t)) {
+                    const doc = new DOMParser().parseFromString(t, 'text/html');
+                    t = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
+                } else if (t.startsWith('Title:')) {
                     const cut = t.indexOf('\n\n');
-                    if (cut > 0 && cut < 400) {
+                    if (cut > 0 && cut < 500) {
                         t = t.slice(cut + 2).trim();
                     }
+                }
+                t = stripReaderResponseNoise(t);
+                if (t.length < 60) {
+                    continue;
                 }
                 return clipForStorage(t, ARTICLE_CARD_MAX);
             } catch {
@@ -1098,6 +1098,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         return '';
+    }
+
+    /** 點選新聞後：重新抓正文，失敗再退回 RSS description 解析 */
+    async function fetchFullNewsBodyForItem(item) {
+        let body = '';
+        if (item.url) {
+            body = await fetchNewsPageReaderText(item.url);
+        }
+        body = stripReaderResponseNoise(body || '');
+        if (item.title) {
+            body = dedupeRepeatedTitle(body, item.title);
+        }
+        if (!body || body.length < 35) {
+            body = extractGoogleNewsSnippet(item.descriptionRaw || '', item.title);
+        }
+        item.newsSnippetDisplay = clipForStorage(body, ARTICLE_CARD_MAX);
     }
 
     /** 只解析欄位；摘要改在點選後由 extractGoogleNewsSnippet 處理 */
@@ -1121,17 +1137,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             .filter((x) => x.title);
     }
 
-    async function searchGoogleNews(langKey, query) {
-        const rssUrl = googleNewsRssUrl(query, langKey);
-        const xml = await corsFetchRssXml(rssUrl);
-        let items = parseGoogleNewsRssRawItems(xml);
-        items.sort((a, b) => {
-            const da = Date.parse(a.pubDate) || 0;
-            const db = Date.parse(b.pubDate) || 0;
-            return db - da;
-        });
-        items = items.slice(0, NEWS_RSS_FETCH);
-        return items.map((it) => ({
+    function mapGoogleNewsRssItem(it, langKey) {
+        return {
             title: it.title,
             link: it.link,
             url: it.link,
@@ -1142,77 +1149,41 @@ document.addEventListener('DOMContentLoaded', async () => {
             kind: 'news',
             extract: null,
             newsSnippetDisplay: null
-        }));
+        };
     }
 
-    function normalizeGrokipediaSlug(input) {
-        let s = input.trim().replace(/\s+/g, '_');
-        try {
-            s = decodeURIComponent(s);
-        } catch {
-            /* keep s */
+    function shuffleArray(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
         }
-        if (s.length && s[0] !== s[0].toUpperCase()) {
-            s = s.charAt(0).toUpperCase() + s.slice(1);
-        }
-        return s;
+        return a;
     }
 
-    async function fetchGrokipediaPage(slugInput) {
-        const slug = normalizeGrokipediaSlug(slugInput);
-        const apiUrl = `https://grokipedia-api.com/page/${encodeURIComponent(slug)}`;
+    /** Google News 頭條 RSS（依地區），再隨機抽幾則當「今日熱門」 */
+    async function fetchTrendingNewsItems(langKey) {
+        const rssUrl =
+            langKey === 'news_en'
+                ? 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en'
+                : 'https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh';
+        const xml = await corsFetchRssXml(rssUrl);
+        let rows = parseGoogleNewsRssRawItems(xml);
+        rows = shuffleArray(rows).slice(0, NEWS_TRENDING_POOL);
+        return rows.slice(0, NEWS_TRENDING_SHOW).map((it) => mapGoogleNewsRssItem(it, langKey));
+    }
 
-        async function readGrokipediaResponse(r) {
-            if (r.status === 404) {
-                throw new Error('找不到此條目，請改用 Grokipedia 網址上的標題（如 Artificial_intelligence）');
-            }
-            if (!r.ok) {
-                throw new Error('Grokipedia API 錯誤 ' + r.status);
-            }
-            const j = await r.json();
-            const raw = (j.content_text || '').trim();
-            if (!raw) {
-                throw new Error('此頁沒有內文');
-            }
-            const text = clipForStorage(raw, ARTICLE_CARD_MAX);
-            return {
-                title: j.title || slug.replace(/_/g, ' '),
-                extract: text,
-                url: j.url || `https://grokipedia.com/page/${encodeURIComponent(slug)}`,
-                kind: 'grokipedia'
-            };
-        }
-
-        try {
-            const r = await fetchWithTimeout(apiUrl);
-            return await readGrokipediaResponse(r);
-        } catch (directErr) {
-            const msg = (directErr && directErr.message) || '';
-            const isLikelyCors =
-                directErr instanceof TypeError ||
-                directErr.name === 'AbortError' ||
-                /failed to fetch/i.test(msg);
-            if (!isLikelyCors) {
-                throw directErr;
-            }
-            try {
-                const body = await corsFetchText(apiUrl);
-                const j = JSON.parse(body);
-                const raw = (j.content_text || '').trim();
-                if (!raw) {
-                    throw new Error('此頁沒有內文');
-                }
-                const text = clipForStorage(raw, ARTICLE_CARD_MAX);
-                return {
-                    title: j.title || slug.replace(/_/g, ' '),
-                    extract: text,
-                    url: j.url || `https://grokipedia.com/page/${encodeURIComponent(slug)}`,
-                    kind: 'grokipedia'
-                };
-            } catch {
-                throw friendlyArticleSearchError(directErr);
-            }
-        }
+    async function searchGoogleNews(langKey, query) {
+        const rssUrl = googleNewsRssUrl(query, langKey);
+        const xml = await corsFetchRssXml(rssUrl);
+        let items = parseGoogleNewsRssRawItems(xml);
+        items.sort((a, b) => {
+            const da = Date.parse(a.pubDate) || 0;
+            const db = Date.parse(b.pubDate) || 0;
+            return db - da;
+        });
+        items = items.slice(0, NEWS_RSS_FETCH);
+        return items.map((it) => mapGoogleNewsRssItem(it, langKey));
     }
 
     function clipForStorage(text, maxChars) {
@@ -1223,14 +1194,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         return `${t.slice(0, maxChars).trim()}…`;
     }
 
-    function ensureNewsExtract(item) {
-        if (item.kind !== 'news' || item.descriptionRaw == null || item.extract) {
+    function rebuildNewsCardExtract(item) {
+        if (item.kind !== 'news') {
             return;
         }
-        const snippet = extractGoogleNewsSnippet(item.descriptionRaw || '', item.title);
-        item.newsSnippetDisplay = snippet;
+        const snippet =
+            item.newsSnippetDisplay || extractGoogleNewsSnippet(item.descriptionRaw || '', item.title) || '';
         const srcLine = item.sourceName ? `來源：${item.sourceName}` : '';
-        const bodyParts = [item.title, snippet, srcLine, item.link ? `連結：${item.link}` : ''].filter(Boolean);
+        const bodyParts = [item.title, snippet, srcLine, item.url ? `連結：${item.url}` : ''].filter(Boolean);
         item.extract = clipForStorage(bodyParts.join('\n\n'), ARTICLE_CARD_MAX);
     }
 
@@ -1265,7 +1236,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveBtn.className = 'input-action-btn article-save-btn';
         saveBtn.textContent = '一鍵存入';
         saveBtn.addEventListener('click', async () => {
-            ensureNewsExtract(item);
             await saveArticleSummaryAsCard(item);
         });
         actions.appendChild(saveBtn);
@@ -1273,13 +1243,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const urlKey = item.url || item.title || '';
         detailPanel.dataset.detailKey = urlKey;
-
-        if (item.kind === 'grokipedia') {
-            body.textContent = item.extract || '（無內文）';
-            return;
-        }
-
-        ensureNewsExtract(item);
 
         function setNewsBodyText(txt, isLoading) {
             if (detailPanel.dataset.detailKey !== urlKey) {
@@ -1293,56 +1256,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        const snippet = item.newsSnippetDisplay || '';
-        if (snippet.length >= 45) {
-            setNewsBodyText(snippet, false);
-            return;
-        }
-
-        if (item.url) {
-            setNewsBodyText(snippet || '正在載入原文摘要以供預覽…', true);
-            fetchNewsPageReaderText(item.url)
-                .then((extra) => {
-                    if (detailPanel.dataset.detailKey !== urlKey) {
-                        return;
-                    }
-                    if (extra && extra.length > 80) {
-                        item.newsSnippetDisplay = extra;
-                        item.extract = clipForStorage(
-                            [item.title, extra, item.sourceName ? `來源：${item.sourceName}` : '', `連結：${item.url}`]
-                                .filter(Boolean)
-                                .join('\n\n'),
-                            ARTICLE_CARD_MAX
-                        );
-                        setNewsBodyText(extra, false);
-                    } else {
-                        setNewsBodyText(
-                            snippet ||
-                                '此則在 RSS 中僅含標題與連結；請點「開啟原文」閱讀完整報導。',
-                            false
-                        );
-                    }
-                })
-                .catch(() => {
-                    if (detailPanel.dataset.detailKey !== urlKey) {
-                        return;
-                    }
-                    setNewsBodyText(
-                        snippet || '無法載入原文預覽；請點「開啟原文」閱讀。',
-                        false
-                    );
-                });
-        } else {
-            setNewsBodyText(snippet || '（無連結可載入原文）', false);
-        }
+        setNewsBodyText('已向原文連結重新請求內文，請稍候…', true);
+        fetchFullNewsBodyForItem(item)
+            .then(() => {
+                if (detailPanel.dataset.detailKey !== urlKey) {
+                    return;
+                }
+                rebuildNewsCardExtract(item);
+                const txt = item.newsSnippetDisplay || '';
+                if (!txt || txt.length < 8) {
+                    setNewsBodyText('未取得內文，請點「開啟原文」閱讀完整報導。', false);
+                } else {
+                    setNewsBodyText(txt, false);
+                }
+            })
+            .catch(() => {
+                if (detailPanel.dataset.detailKey !== urlKey) {
+                    return;
+                }
+                setNewsBodyText('載入內文失敗，請點「開啟原文」或稍後再試。', false);
+            });
     }
 
-    function renderNewsPickList(items) {
+    function renderNewsPickList(items, hintLine) {
         articleSearchResults.innerHTML = '';
 
         const hint = document.createElement('p');
         hint.className = 'article-results-pick-hint';
-        hint.textContent = '已載入標題（新→舊）。請點選一則，下方會顯示摘要與存入。';
+        hint.textContent =
+            hintLine ||
+            '已載入標題（新→舊）。點選一則後會重新向原文連結請求內文並顯示在下方；若載入失敗請用「開啟原文」。';
         articleSearchResults.appendChild(hint);
 
         const list = document.createElement('div');
@@ -1403,47 +1346,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    function renderGrokipediaPick(item) {
-        articleSearchResults.innerHTML = '';
-
-        const hint = document.createElement('p');
-        hint.className = 'article-results-pick-hint';
-        hint.textContent = '已找到條目。請點選標題，下方顯示內文預覽與存入。';
-        articleSearchResults.appendChild(hint);
-
-        const list = document.createElement('div');
-        list.className = 'article-result-pick-list';
-
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'article-result-pick-row';
-        const titleLine = document.createElement('div');
-        titleLine.className = 'article-result-pick-title';
-        titleLine.textContent = item.title;
-        row.appendChild(titleLine);
-        const metaLine = document.createElement('div');
-        metaLine.className = 'article-result-pick-meta';
-        metaLine.textContent = 'Grokipedia';
-        row.appendChild(metaLine);
-        list.appendChild(row);
-        articleSearchResults.appendChild(list);
-
-        const detail = document.createElement('div');
-        detail.className = 'article-search-detail article-search-detail--empty';
-        const ph = document.createElement('p');
-        ph.className = 'article-detail-placeholder';
-        ph.textContent = '請點選上方條目';
-        detail.appendChild(ph);
-        articleSearchResults.appendChild(detail);
-
-        row.addEventListener('click', () => {
-            list.querySelectorAll('.article-result-pick-row').forEach((r) => r.classList.remove('is-selected'));
-            row.classList.add('is-selected');
-            fillArticleDetailPanel(detail, item);
-            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-    }
-
     function renderArticleResults(items) {
         articleSearchResults.innerHTML = '';
 
@@ -1455,12 +1357,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const first = items[0];
-        if (first.kind === 'grokipedia' && items.length === 1) {
-            renderGrokipediaPick(first);
-            return;
-        }
-        if (first.kind === 'news') {
+        if (items[0].kind === 'news') {
             renderNewsPickList(items);
             return;
         }
@@ -1472,14 +1369,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function saveArticleSummaryAsCard(item) {
-        ensureNewsExtract(item);
+        if (!item.newsSnippetDisplay || item.newsSnippetDisplay.length < 12) {
+            try {
+                await fetchFullNewsBodyForItem(item);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        rebuildNewsCardExtract(item);
 
-        let combined =
-            item.kind === 'grokipedia'
-                ? `${item.title}\n\n${item.extract || ''}`
-                : item.extract && item.extract.includes(item.title)
-                  ? item.extract
-                  : `${item.title}\n\n${item.extract || ''}`;
+        let combined = item.extract || '';
         combined = clipForStorage(combined, ARTICLE_CARD_MAX);
         if (!combined) {
             alert('沒有可存入的內容');
@@ -1511,7 +1410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function runArticleSearch() {
         const q = articleSearchInput.value.trim();
         if (!q) {
-            articleSearchResults.innerHTML = '<p class="article-results-empty">請輸入關鍵字或條目名</p>';
+            articleSearchResults.innerHTML = '<p class="article-results-empty">請輸入關鍵字</p>';
             return;
         }
 
@@ -1522,13 +1421,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         articleSearchResults.innerHTML = '<p class="article-results-loading">搜尋中…</p>';
 
         try {
-            if (source === 'grokipedia') {
-                const page = await fetchGrokipediaPage(q);
-                renderArticleResults([page]);
-            } else {
-                const items = await searchGoogleNews(source, q);
-                renderArticleResults(items.slice(0, NEWS_DISPLAY));
-            }
+            const items = await searchGoogleNews(source, q);
+            renderArticleResults(items.slice(0, NEWS_DISPLAY));
         } catch (e) {
             console.error(e);
             const fe = friendlyArticleSearchError(e);
@@ -1544,9 +1438,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    async function runRandomTrendingNews() {
+        const langKey = articleSourceSelect.value === 'news_en' ? 'news_en' : 'news_zh';
+        const disableTrending = () => {
+            if (articleTrendingBtn) {
+                articleTrendingBtn.disabled = true;
+            }
+            articleSearchBtn.disabled = true;
+        };
+        const enableTrending = () => {
+            if (articleTrendingBtn) {
+                articleTrendingBtn.disabled = false;
+            }
+            articleSearchBtn.disabled = false;
+        };
+
+        disableTrending();
+        const prevTrending = articleTrendingBtn ? articleTrendingBtn.textContent : '';
+        if (articleTrendingBtn) {
+            articleTrendingBtn.textContent = '載入中…';
+        }
+        articleSearchResults.innerHTML = '<p class="article-results-loading">載入今日頭條並隨機挑選…</p>';
+
+        try {
+            const items = await fetchTrendingNewsItems(langKey);
+            renderNewsPickList(
+                items,
+                '以下為 Google 今日頭條中隨機挑選的幾則（每次不同）。點選一則後會重新向原文連結請求內文；若失敗請用「開啟原文」。'
+            );
+        } catch (e) {
+            console.error(e);
+            const fe = friendlyArticleSearchError(e);
+            const msg = fe && fe.message ? fe.message : String(fe);
+            articleSearchResults.innerHTML = '';
+            const errP = document.createElement('p');
+            errP.className = 'article-results-empty';
+            errP.textContent = '熱門新聞載入失敗：' + msg + '。';
+            articleSearchResults.appendChild(errP);
+        } finally {
+            enableTrending();
+            if (articleTrendingBtn) {
+                articleTrendingBtn.textContent = prevTrending || '隨機今日熱門';
+            }
+        }
+    }
+
     articleSearchBtn.addEventListener('click', () => {
         runArticleSearch().catch((e) => console.error(e));
     });
+
+    if (articleTrendingBtn) {
+        articleTrendingBtn.addEventListener('click', () => {
+            runRandomTrendingNews().catch((e) => console.error(e));
+        });
+    }
 
     articleSearchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
