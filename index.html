@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>單字卡學習</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -51,21 +51,6 @@
         </div>
 
         <div class="control-panel">
-            <div class="slider-container">
-                <label>卡片寬度：</label>
-                <input type="range" id="sizeSlider" min="150" max="800" value="250">
-                <span id="sizeValue">250px</span>
-            </div>
-            <div class="slider-container">
-                <label>字體大小：</label>
-                <input type="range" id="fontSizeSlider" min="12" max="48" value="24">
-                <span id="fontSizeValue">24px</span>
-            </div>
-            <div class="slider-container">
-                <label>卡片高度：</label>
-                <input type="range" id="heightSlider" min="50" max="200" value="120">
-                <span id="heightValue">120px</span>
-            </div>
             <div class="input-container">
                 <label>播放次數：</label>
                 <input type="number" id="playCountInput" min="1" max="10" value="2">
@@ -75,14 +60,6 @@
                 <label>播放間隔：</label>
                 <input type="number" id="playIntervalInput" min="1" max="30" value="3">
                 <span>秒</span>
-            </div>
-            <div class="display-mode" style="margin-top: 8px;">
-                <label>測試按鈕：</label>
-                <button id="testSave" class="mode-btn">測試存儲</button>
-                <button id="testLoad" class="mode-btn">測試讀取</button>
-                <button id="testDarkMode" class="mode-btn">測試夜間模式</button>
-                <button id="testCardHeight" class="mode-btn">測試卡片高度</button>
-                <button id="testSupabaseConnection" class="mode-btn">診斷雲端連線</button>
             </div>
         </div>
 
@@ -113,6 +90,7 @@
         <div class="cards-container" id="cardsContainer">
             <!-- 單字卡將在這裡動態生成 -->
         </div>
+        <div id="loadMoreTrigger" class="load-more-trigger"></div>
     </div>
     <script src="main.js"></script>
 </body>

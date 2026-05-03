@@ -29,6 +29,7 @@ body {
     margin: 10px 0;
     border: 1px solid #ddd;
     border-radius: 4px;
+    font-size: 16px;
 }
 
 .add-card-section input[readonly] {
@@ -63,14 +64,15 @@ button:hover {
     flex-grow: 0;
     flex-shrink: 0;
     word-wrap: break-word;
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
     overflow: hidden;
     position: relative;
+    max-width: 100%;
 }
 
 .flashcard .english {
     margin-bottom: 10px;
-    word-break: break-all;
+    word-break: break-word;
     white-space: pre-wrap;
     transition: font-size 0.3s ease;
 }
@@ -78,7 +80,7 @@ button:hover {
 .flashcard .chinese {
     color: #666;
     display: none;
-    word-break: break-all;
+    word-break: break-word;
     white-space: pre-wrap;
     transition: font-size 0.3s ease;
 }
@@ -101,22 +103,6 @@ button:hover {
     border-radius: 8px;
     margin-bottom: 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.slider-container {
-    margin: 10px 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-}
-
-.slider-container label {
-    white-space: nowrap;
-}
-
-.slider-container input[type="range"] {
-    flex: 1;
 }
 
 .input-container {
@@ -144,16 +130,15 @@ button:hover {
     color: #666;
 }
 
-#sizeValue {
-    min-width: 60px;
-    text-align: right;
-}
-
 .cards-container {
     display: flex;
     flex-wrap: wrap;
     gap: 20px;
     justify-content: flex-start;
+}
+
+.load-more-trigger {
+    height: 1px;
 }
 
 .display-mode {
@@ -444,15 +429,6 @@ body.dark-mode .input-action-btn:hover {
     display: none;
 }
 
-/* 夜間模式下的字體大小滑軌樣式 */
-body.dark-mode #fontSizeSlider::-webkit-slider-thumb {
-    background: #4CAF50;
-}
-
-body.dark-mode #fontSizeSlider::-moz-range-thumb {
-    background: #4CAF50;
-}
-
 /* 刪除按鈕位置已在上方定義 */
 
 /* 星級評分樣式 */
@@ -542,5 +518,21 @@ body.dark-mode .delete-btn {
 body.dark-mode .delete-btn:hover {
     background-color: #ff5555;
     color: white;
+}
+
+@media (max-width: 768px) {
+    .container {
+        max-width: 100%;
+        padding: 0 10px;
+    }
+
+    .cards-container {
+        gap: 12px;
+        justify-content: center;
+    }
+
+    .flashcard {
+        width: 100%;
+    }
 }
   

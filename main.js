@@ -38,8 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pasteInputBtn = document.getElementById('pasteInputBtn');
     const copyTranslationBtn = document.getElementById('copyTranslationBtn');
     const cardsContainer = document.getElementById('cardsContainer');
-    const sizeSlider = document.getElementById('sizeSlider');
-    const sizeValue = document.getElementById('sizeValue');
+    const loadMoreTrigger = document.getElementById('loadMoreTrigger');
     const showAllBtn = document.getElementById('showAll');
     const showEnglishBtn = document.getElementById('showEnglish');
     const showChineseBtn = document.getElementById('showChinese');
@@ -52,10 +51,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sortByAlphabetBtn = document.getElementById('sortByAlphabet');
     const newCardRating = document.getElementById('newCardRating');
     const ratingValue = document.getElementById('ratingValue');
-    const fontSizeSlider = document.getElementById('fontSizeSlider');
-    const fontSizeValue = document.getElementById('fontSizeValue');
-    const heightSlider = document.getElementById('heightSlider');
-    const heightValue = document.getElementById('heightValue');
     const playCountInput = document.getElementById('playCountInput');
     const playIntervalInput = document.getElementById('playIntervalInput');
     const playAllCardsBtn = document.getElementById('playAllCards');
@@ -69,12 +64,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     let playTimeout = null;
     let currentPlayIndex = 0;
     let translationDebounceTimer = null;
+    let isLoadingCards = false;
+    let hasMoreCards = true;
+    let cardsOffset = 0;
+    const CARDS_PAGE_SIZE = 30;
 
     // 設置管理
     const defaultSettings = {
-        cardWidth: '250',
-        fontSize: '24',
-        cardHeight: '120',
         playCount: '2',
         playInterval: '3',
         displayMode: 'all',
@@ -199,27 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function applySettings(settings) {
-        // 應用卡片寬度
-        if (settings.cardWidth) {
-            sizeSlider.value = settings.cardWidth;
-            sizeValue.textContent = `${settings.cardWidth}px`;
-            updateCardSize(true); // skipSave = true
-        }
-        
-        // 應用字體大小
-        if (settings.fontSize) {
-            fontSizeSlider.value = settings.fontSize;
-            fontSizeValue.textContent = `${settings.fontSize}px`;
-            updateFontSize(true); // skipSave = true
-        }
-        
-        // 應用卡片高度
-        if (settings.cardHeight) {
-            heightSlider.value = settings.cardHeight;
-            heightValue.textContent = `${settings.cardHeight}px`;
-            updateCardHeight(true); // skipSave = true
-        }
-        
         // 應用播放次數
         if (settings.playCount) {
             playCountInput.value = settings.playCount;
@@ -376,27 +351,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 綁定編輯模式按鈕事件
     editModeBtn.addEventListener('click', toggleEditMode);
 
-    // 控制卡片寬度
-    function updateCardSize(skipSave = false) {
-        const size = sizeSlider.value;
-        sizeValue.textContent = `${size}px`;
-        
-        // 更新所有卡片的寬度
-        document.querySelectorAll('.flashcard').forEach(card => {
-            card.style.width = `${size}px`;
-        });
-        
-        // 保存設置（除非明確跳過）
-        if (!skipSave) {
-            saveSetting('cardWidth', size);
-        }
-    }
-
-    // 監聽滑軌變化
-    sizeSlider.addEventListener('input', () => {
-        updateCardSize(); // updateCardSize 內部會自動保存
-    });
-
     // 排序功能
     function sortCards(mode) {
         let sortedCards = [...flashcards];
@@ -410,8 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 break;
             case 'time':
             default:
-                // 按時間排序：最新的在最上面（倒序）
-                sortedCards.reverse();
+                // 分頁載入時已經是最新在前
                 break;
         }
         
@@ -460,8 +413,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cardElement = createCardElement(card, originalIndex);
             cardsContainer.appendChild(cardElement);
         });
-        updateCardSize(); // 應用當前的寬度設置
-        updateCardHeight(); // 應用當前的高度設置
     }
 
     // 創建單字卡元素
@@ -638,7 +589,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.log('成功保存到 Supabase');
             
             // 將新卡片添加到本地數組
-            flashcards.push(newCard);
+            flashcards.unshift(newCard);
             
             // 保存到本地存儲
             localStorage.setItem('flashcards', JSON.stringify(flashcards));
@@ -679,16 +630,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTranslateButtonState();
     initializeStarRating();
     
-    // 4. 初始化字體大小和卡片高度（必須在 displayCards 之後）
-    updateFontSize(true); // skipSave = true，避免覆蓋已載入的設定
-    updateCardHeight(true); // skipSave = true，避免覆蓋已載入的設定
-    
     console.log('✅ 快速初始化完成，開始背景同步...');
     
+    function setupInfiniteScroll() {
+        if (!loadMoreTrigger || typeof IntersectionObserver === 'undefined') {
+            return;
+        }
+
+        const observer = new IntersectionObserver(async (entries) => {
+            const targetEntry = entries[0];
+            if (targetEntry.isIntersecting && hasMoreCards && !isLoadingCards) {
+                await loadFromSupabase(false);
+            }
+        }, {
+            root: null,
+            rootMargin: '200px',
+            threshold: 0
+        });
+
+        observer.observe(loadMoreTrigger);
+    }
+
+    setupInfiniteScroll();
+
     // 4. 背景同步雲端數據（不阻塞界面）
     Promise.all([
         syncCloudSettings(localSettings),
-        loadFromSupabase()
+        loadFromSupabase(true)
     ]).then(([settingsSync, cardsSync]) => {
         console.log('🌐 背景同步完成');
         console.log('設置同步:', settingsSync ? '成功' : '失敗');
@@ -1041,63 +1009,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function loadFromSupabase() {
+    async function loadFromSupabase(reset = false) {
+        if (isLoadingCards) {
+            return true;
+        }
+
         try {
-            console.log('正在从 Supabase 读取数据...');
-            
-            // 从 user_cards 表读取数据
+            if (reset) {
+                cardsOffset = 0;
+                hasMoreCards = true;
+                flashcards = [];
+            }
+
+            if (!hasMoreCards) {
+                return true;
+            }
+
+            isLoadingCards = true;
+            console.log(`正在从 Supabase 分頁读取数据... offset=${cardsOffset}, limit=${CARDS_PAGE_SIZE}`);
+
             const { data, error } = await supabaseClient
                 .from('user_cards')
                 .select('*')
-                .order('id', { ascending: true });
+                .order('id', { ascending: false })
+                .range(cardsOffset, cardsOffset + CARDS_PAGE_SIZE - 1);
             
             if (error) {
                 throw error;
             }
             
-            console.log('获取到的原始数据:', data);
-            
             if (data && data.length > 0) {
-                console.log('成功读取到数据，长度:', data.length);
-                // 提取 english、chinese 和 rating 字段
-                flashcards = data.map(item => ({
+                const pageCards = data.map(item => ({
                     english: item.english,
                     chinese: item.chinese,
                     rating: item.rating || 0
                 }));
+
+                flashcards = [...flashcards, ...pageCards];
+                cardsOffset += data.length;
+                hasMoreCards = data.length === CARDS_PAGE_SIZE;
+                console.log(`分頁讀取成功，本次 ${data.length} 筆，累計 ${flashcards.length} 筆`);
             } else {
-                console.log('数据库中没有数据，创建初始数据');
-                // 如果数据库中没有数据，创建初始数据
-                const initialData = [
-                    {
-                        english: "Hello",
-                        chinese: "你好",
-                        rating: 3
-                    },
-                    {
-                        english: "Thank you",
-                        chinese: "謝謝",
-                        rating: 4
-                    },
-                    {
-                        english: "Good morning",
-                        chinese: "早安",
-                        rating: 2
-                    }
-                ];
-                
-                // 将初始数据保存到 user_cards 表
-                console.log('正在保存初始数据到 user_cards ...');
-                const { error: insertError } = await supabaseClient
-                    .from('user_cards')
-                    .insert(initialData);
-                
-                if (insertError) {
-                    throw insertError;
+                hasMoreCards = false;
+                if (reset) {
+                    console.log('資料庫目前沒有卡片');
                 }
-                
-                console.log('初始数据保存成功');
-                flashcards = initialData;
             }
             
             localStorage.setItem('flashcards', JSON.stringify(flashcards));
@@ -1107,6 +1063,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('从 Supabase 加载失败，详细错误:', error);
             console.error('错误堆栈:', error.stack);
             return false;
+        } finally {
+            isLoadingCards = false;
         }
     }
 
@@ -1126,28 +1084,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 async (payload) => {
                     console.log('检测到数据变化:', payload);
                     
-                    // 重新加载所有数据以保持同步
+                    // 變更後重置分頁並重新載入第一批
                     try {
-                        const { data, error } = await supabaseClient
-                            .from('user_cards')
-                            .select('*')
-                            .order('id', { ascending: true });
-                        
-                        if (error) {
-                            console.error('重新加载数据时出错:', error);
-                            return;
-                        }
-                        
-                        if (data && data.length >= 0) {
-                            console.log('更新本地数据，新数据长度:', data.length);
-                            flashcards = data.map(item => ({
-                                english: item.english,
-                                chinese: item.chinese,
-                                rating: item.rating || 0
-                            }));
-                            localStorage.setItem('flashcards', JSON.stringify(flashcards));
-                            displayCards();
-                        }
+                        await loadFromSupabase(true);
                     } catch (error) {
                         console.error('实时同步错误:', error);
                     }
@@ -1184,331 +1123,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupRealtimeSync();
     setupSettingsSync();
 
-    // 獲取測試按鈕
-    const testSaveBtn = document.getElementById('testSave');
-    const testLoadBtn = document.getElementById('testLoad');
-    const testDarkModeBtn = document.getElementById('testDarkMode');
-    const testCardHeightBtn = document.getElementById('testCardHeight');
-    const testSupabaseConnectionBtn = document.getElementById('testSupabaseConnection');
-
-    // 測試存儲功能
-    testSaveBtn.addEventListener('click', async () => {
-        console.log('===== 開始測試 Supabase 存儲功能 =====');
-        testSaveBtn.textContent = '存儲中...';
-        testSaveBtn.disabled = true;
-
-        try {
-            // 檢查數據
-            console.log('當前要存儲的數據:', flashcards);
-            
-            // 嘗試存儲到 Supabase
-            const success = await saveToSupabase();
-            
-            if (success) {
-                console.log('✅ 存儲成功！');
-                alert('存儲成功！');
-            } else {
-                throw new Error('存儲操作失敗');
-            }
-        } catch (error) {
-            console.error('❌ 存儲失敗:', error);
-            console.error('詳細錯誤:', error.message);
-            alert('存儲失敗: ' + error.message);
-        } finally {
-            testSaveBtn.textContent = '測試存儲';
-            testSaveBtn.disabled = false;
-            console.log('===== Supabase 存儲測試結束 =====');
-        }
-    });
-
-    // 測試讀取功能
-    testLoadBtn.addEventListener('click', async () => {
-        console.log('===== 開始測試 Supabase 讀取功能 =====');
-        testLoadBtn.textContent = '讀取中...';
-        testLoadBtn.disabled = true;
-
-        try {
-            // 嘗試從 Supabase 讀取數據
-            const success = await loadFromSupabase();
-            
-            if (success) {
-                console.log('✅ 讀取成功！');
-                console.log('數據長度:', flashcards.length);
-                alert(`讀取成功！共讀取到 ${flashcards.length} 張卡片`);
-            } else {
-                throw new Error('讀取操作失敗');
-            }
-        } catch (error) {
-            console.error('❌ 讀取失敗:', error);
-            console.error('詳細錯誤:', error.message);
-            alert('讀取失���: ' + error.message);
-        } finally {
-            testLoadBtn.textContent = '測試讀取';
-            testLoadBtn.disabled = false;
-            console.log('===== Supabase 讀取測試結束 =====');
-        }
-    });
-
-    // 測試夜間模式設置功能
-    testDarkModeBtn.addEventListener('click', async () => {
-        console.log('===== 開始測試夜間模式設置 =====');
-        testDarkModeBtn.textContent = '測試中...';
-        testDarkModeBtn.disabled = true;
-
-        try {
-            console.log('當前夜間模式狀態:', isDarkMode);
-            console.log('本地存儲中的設置:', localStorage.getItem('darkMode'));
-            
-            // 測試從 Supabase 讀取夜間模式設置
-            const { data, error } = await supabaseClient
-                .from('user_settings')
-                .select('*')
-                .eq('setting_key', 'darkMode');
-            
-            if (error) {
-                console.error('從 Supabase 讀取夜間模式設置失敗:', error);
-                alert('讀取失敗: ' + error.message);
-            } else {
-                console.log('Supabase 中的夜間模式設置:', data);
-                
-                if (data && data.length > 0) {
-                    const cloudSetting = data[0].setting_value;
-                    const localSetting = localStorage.getItem('darkMode');
-                    
-                    console.log('雲端設置:', cloudSetting);
-                    console.log('本地設置:', localSetting);
-                    console.log('當前狀態:', isDarkMode.toString());
-                    
-                    alert(`夜間模式設置檢查:\n雲端: ${cloudSetting}\n本地: ${localSetting}\n當前: ${isDarkMode}`);
-                } else {
-                    console.log('Supabase 中沒有夜間模式設置');
-                    alert('Supabase 中沒有夜間模式設置，可能是 user_settings 表不存在');
-                }
-            }
-            
-        } catch (error) {
-            console.error('測試夜間模式設置時出錯:', error);
-            alert('測試失敗: ' + error.message);
-        } finally {
-            testDarkModeBtn.textContent = '測試夜間模式';
-            testDarkModeBtn.disabled = false;
-            console.log('===== 夜間模式設置測試結束 =====');
-        }
-    });
-
-    // 測試卡片高度雲端同步功能
-    testCardHeightBtn.addEventListener('click', async () => {
-        console.log('===== 開始測試卡片高度雲端同步 =====');
-        testCardHeightBtn.textContent = '測試中...';
-        testCardHeightBtn.disabled = true;
-
-        try {
-            console.log('當前卡片高度設置:', heightSlider.value);
-            console.log('本地存儲中的卡片高度:', localStorage.getItem('cardHeight'));
-            
-            // 測試從 Supabase 讀取卡片高度設置
-            const { data, error } = await supabaseClient
-                .from('user_settings')
-                .select('*')
-                .eq('setting_key', 'cardHeight');
-            
-            if (error) {
-                console.error('從 Supabase 讀取卡片高度設置失敗:', error);
-                alert('讀取失敗: ' + error.message);
-            } else {
-                console.log('Supabase 中的卡片高度設置:', data);
-                
-                if (data && data.length > 0) {
-                    const cloudSetting = data[0].setting_value;
-                    const localSetting = localStorage.getItem('cardHeight');
-                    const currentValue = heightSlider.value;
-                    
-                    console.log('雲端設置:', cloudSetting);
-                    console.log('本地設置:', localSetting);
-                    console.log('當前滑軌值:', currentValue);
-                    
-                    alert(`卡片高度設置檢查:\n雲端: ${cloudSetting}px\n本地: ${localSetting}px\n當前: ${currentValue}px`);
-                } else {
-                    console.log('Supabase 中沒有卡片高度設置');
-                    alert('Supabase 中沒有卡片高度設置，可能是 user_settings 表不存在或該設置尚未保存');
-                }
-            }
-            
-        } catch (error) {
-            console.error('測試卡片高度設置時出錯:', error);
-            alert('測試失敗: ' + error.message);
-        } finally {
-            testCardHeightBtn.textContent = '測試卡片高度';
-            testCardHeightBtn.disabled = false;
-            console.log('===== 卡片高度設置測試結束 =====');
-        }
-    });
-
-    // 診斷 Supabase 雲端連線功能
-    testSupabaseConnectionBtn.addEventListener('click', async () => {
-        console.log('===== 開始診斷 Supabase 雲端連線 =====');
-        testSupabaseConnectionBtn.textContent = '診斷中...';
-        testSupabaseConnectionBtn.disabled = true;
-
-        try {
-            // 1. 測試基本連線
-            console.log('1. 測試 Supabase 基本連線...');
-            console.log('Supabase URL:', supabaseUrl);
-            console.log('Supabase Key:', supabaseKey ? '已設置' : '未設置');
-
-            // 2. 測試 user_settings 表是否存在
-            console.log('2. 測試 user_settings 表...');
-            const { data: settingsData, error: settingsError } = await supabaseClient
-                .from('user_settings')
-                .select('count', { count: 'exact', head: true });
-
-            if (settingsError) {
-                console.error('user_settings 表錯誤:', settingsError);
-                if (settingsError.message.includes('relation') && settingsError.message.includes('does not exist')) {
-                    alert('❌ user_settings 表不存在！\n\n請在 Supabase SQL 編輯器中執行:\n\nCREATE TABLE user_settings (\n    id BIGSERIAL PRIMARY KEY,\n    setting_key TEXT NOT NULL UNIQUE,\n    setting_value TEXT NOT NULL,\n    updated_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow all operations" ON user_settings FOR ALL USING (true);');
-                    return;
-                }
-                throw settingsError;
-            }
-
-            console.log('✅ user_settings 表存在，記錄數:', settingsData);
-
-            // 3. 測試 user_cards 表是否存在
-            console.log('3. 測試 user_cards 表...');
-            const { data: cardsData, error: cardsError } = await supabaseClient
-                .from('user_cards')
-                .select('count', { count: 'exact', head: true });
-
-            if (cardsError) {
-                console.error('user_cards 表錯誤:', cardsError);
-                if (cardsError.message.includes('relation') && cardsError.message.includes('does not exist')) {
-                    alert('❌ user_cards 表不存在！\n\n請在 Supabase SQL 編輯器中執行:\n\nCREATE TABLE user_cards (\n    id BIGSERIAL PRIMARY KEY,\n    english TEXT NOT NULL,\n    chinese TEXT NOT NULL,\n    rating INTEGER DEFAULT 0,\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\nALTER TABLE user_cards ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow all operations" ON user_cards FOR ALL USING (true);');
-                    return;
-                }
-                throw cardsError;
-            }
-
-            console.log('✅ user_cards 表存在，記錄數:', cardsData);
-
-            // 4. 測試寫入權限
-            console.log('4. 測試設置寫入權限...');
-            const testKey = 'test_connection_' + Date.now();
-            const { error: writeError } = await supabaseClient
-                .from('user_settings')
-                .upsert({ 
-                    setting_key: testKey, 
-                    setting_value: 'test_value'
-                });
-
-            if (writeError) {
-                console.error('寫入測試失敗:', writeError);
-                alert('❌ 無法寫入 user_settings 表！\n錯誤: ' + writeError.message + '\n\n可能需要檢查 RLS 策略設置。');
-                return;
-            }
-
-            console.log('✅ 寫入測試成功');
-
-            // 5. 測試讀取權限
-            console.log('5. 測試設置讀取權限...');
-            const { data: readData, error: readError } = await supabaseClient
-                .from('user_settings')
-                .select('*')
-                .eq('setting_key', testKey);
-
-            if (readError) {
-                console.error('讀取測試失敗:', readError);
-                alert('❌ 無法讀取 user_settings 表！\n錯誤: ' + readError.message);
-                return;
-            }
-
-            console.log('✅ 讀取測試成功:', readData);
-
-            // 6. 清理測試數據
-            await supabaseClient
-                .from('user_settings')
-                .delete()
-                .eq('setting_key', testKey);
-
-            console.log('✅ 測試數據清理完成');
-
-            // 7. 檢查現有設置
-            console.log('6. 檢查現有設置...');
-            const { data: allSettings, error: allError } = await supabaseClient
-                .from('user_settings')
-                .select('*');
-
-            if (allError) {
-                console.error('讀取所有設置失敗:', allError);
-            } else {
-                console.log('現有設置:', allSettings);
-                const settingsList = allSettings.map(s => `${s.setting_key}: ${s.setting_value}`).join('\n');
-                alert(`✅ Supabase 連線診斷成功！\n\n資料庫狀態:\n- user_settings 表: 存在\n- user_cards 表: 存在\n- 讀寫權限: 正常\n\n現有設置 (${allSettings.length} 項):\n${settingsList || '無設置'}`);
-            }
-
-        } catch (error) {
-            console.error('診斷過程中出錯:', error);
-            alert('❌ 診斷失敗: ' + error.message + '\n\n請檢查:\n1. Supabase URL 和 Key 是否正確\n2. 網路連線是否正常\n3. 資料庫表是否已創建');
-        } finally {
-            testSupabaseConnectionBtn.textContent = '診斷雲端連線';
-            testSupabaseConnectionBtn.disabled = false;
-            console.log('===== Supabase 連線診斷結束 =====');
-        }
-    });
-
-    // 字體大小滑軌元素已在前面定義
-
-    // 更新字體大小的函數
-    function updateFontSize(skipSave = false) {
-        const size = fontSizeSlider.value;
-        fontSizeValue.textContent = `${size}px`;
-        
-        console.log(`🔤 更新字體大小: ${size}px, skipSave: ${skipSave}`);
-        
-        // 更新所有卡片的字體大小
-        document.querySelectorAll('.flashcard .english').forEach(element => {
-            element.style.fontSize = `${size}px`;
-        });
-        
-        document.querySelectorAll('.flashcard .chinese').forEach(element => {
-            element.style.fontSize = `${Math.floor(size * 0.75)}px`; // 中文字體稍小
-        });
-        
-        // 保存設置（除非明確跳過）
-        if (!skipSave) {
-            console.log(`💾 準備保存字體大小設置: fontSize = ${size}`);
-            saveSetting('fontSize', size);
-        } else {
-            console.log(`⏭️ 跳過保存字體大小設置`);
-        }
-    }
-
-    // 更新卡片高度的函數
-    function updateCardHeight(skipSave = false) {
-        const height = heightSlider.value;
-        heightValue.textContent = `${height}px`;
-        
-        console.log(`📏 更新卡片高度: ${height}px, skipSave: ${skipSave}`);
-        
-        // 更新所有卡片的高度
-        document.querySelectorAll('.flashcard').forEach(card => {
-            card.style.minHeight = `${height}px`;
-        });
-        
-        // 保存設置（除非明確跳過）
-        if (!skipSave) {
-            console.log(`💾 準備保存卡片高度設置: cardHeight = ${height}`);
-            saveSetting('cardHeight', height);
-        } else {
-            console.log(`⏭️ 跳過保存卡片高度設置`);
-        }
-    }
-
-    // 監聽字體大小滑軌變化
-    fontSizeSlider.addEventListener('input', () => updateFontSize());
-    
-    // 監聽卡片高度滑軌變化
-    heightSlider.addEventListener('input', () => updateCardHeight());
-    
     // 監聽播放設定輸入欄位變化
     playCountInput.addEventListener('change', () => {
         const count = parseInt(playCountInput.value);
@@ -1632,18 +1246,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 綁定播放控制按鈕事件
     playAllCardsBtn.addEventListener('click', playAllCards);
     stopPlaybackBtn.addEventListener('click', stopPlayback);
-    
-    // 在創建卡片時應用字體大小
-    const originalCreateCardElement = createCardElement;
-    createCardElement = function(card, index) {
-        const cardElement = originalCreateCardElement(card, index);
-        const fontSize = fontSizeSlider.value;
-        const cardHeight = heightSlider.value;
-        
-        cardElement.querySelector('.english').style.fontSize = `${fontSize}px`;
-        cardElement.querySelector('.chinese').style.fontSize = `${Math.floor(fontSize * 0.75)}px`;
-        cardElement.style.minHeight = `${cardHeight}px`;
-        
-        return cardElement;
-    }
 }); 
