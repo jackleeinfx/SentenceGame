@@ -35,6 +35,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addCardButton = document.getElementById('addCard');
     const englishInput = document.getElementById('englishWord');
     const chineseInput = document.getElementById('chineseTranslation');
+    const pasteInputBtn = document.getElementById('pasteInputBtn');
+    const copyTranslationBtn = document.getElementById('copyTranslationBtn');
     const cardsContainer = document.getElementById('cardsContainer');
     const sizeSlider = document.getElementById('sizeSlider');
     const sizeValue = document.getElementById('sizeValue');
@@ -66,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isPlaying = false;
     let playTimeout = null;
     let currentPlayIndex = 0;
+    let translationDebounceTimer = null;
 
     // 設置管理
     const defaultSettings = {
@@ -596,54 +599,66 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 修改添加新卡片的事件處理程序
     addCardButton.addEventListener('click', async () => {
-        const english = englishInput.value.trim();
-        const chinese = chineseInput.value.trim();
+        const englishRaw = englishInput.value.trim();
+        const chineseRaw = chineseInput.value.trim();
 
-        if (english && chinese) {
-            try {
-                console.log('正在保存新卡片...');
-                
-                const newCard = { 
-                    english, 
-                    chinese,
-                    rating: currentRating 
-                };
-                
-                // 保存到 Supabase
-                const { data, error } = await supabaseClient
-                    .from('user_cards')
-                    .insert([newCard])
-                    .select();
-                
-                if (error) {
-                    throw error;
-                }
-                
-                console.log('成功保存到 Supabase');
-                
-                // 將新卡片添加到本地數組
-                flashcards.push(newCard);
-                
-                // 保存到本地存儲
-                localStorage.setItem('flashcards', JSON.stringify(flashcards));
-                
-                // 更新顯示
-                displayCards();
-                
-                // 清空輸入框和重置星級為3星
-                englishInput.value = '';
-                chineseInput.value = '';
-                currentRating = 3;
-                updateStarDisplay(3, 'active');
-                ratingValue.textContent = '3星';
-                
-                // 更新翻譯按鈕狀態
-                updateTranslateButtonState();
-            } catch (error) {
-                console.error('保存失敗:', error);
-                console.error('錯誤詳情:', error.message);
-                alert('保存失敗: ' + error.message);
+        if (!englishRaw && !chineseRaw) {
+            return;
+        }
+
+        try {
+            console.log('正在保存新卡片...');
+            const normalized = await normalizeCardInput(englishRaw, chineseRaw);
+
+            if (!normalized.english || !normalized.chinese) {
+                alert('無法自動翻譯完成，請補上另一個語言後再儲存');
+                return;
             }
+
+            // 先同步欄位顯示順序，確保英文在前、中文在後
+            englishInput.value = normalized.english;
+            chineseInput.value = normalized.chinese;
+
+            const newCard = { 
+                english: normalized.english, 
+                chinese: normalized.chinese,
+                rating: currentRating 
+            };
+            
+            // 保存到 Supabase
+            const { data, error } = await supabaseClient
+                .from('user_cards')
+                .insert([newCard])
+                .select();
+            
+            if (error) {
+                throw error;
+            }
+            
+            console.log('成功保存到 Supabase');
+            
+            // 將新卡片添加到本地數組
+            flashcards.push(newCard);
+            
+            // 保存到本地存儲
+            localStorage.setItem('flashcards', JSON.stringify(flashcards));
+            
+            // 更新顯示
+            displayCards();
+            
+            // 清空輸入框和重置星級為3星
+            englishInput.value = '';
+            chineseInput.value = '';
+            currentRating = 3;
+            updateStarDisplay(3, 'active');
+            ratingValue.textContent = '3星';
+            
+            // 更新翻譯按鈕狀態
+            updateTranslateButtonState();
+        } catch (error) {
+            console.error('保存失敗:', error);
+            console.error('錯誤詳情:', error.message);
+            alert('保存失敗: ' + error.message);
         }
     });
 
@@ -846,27 +861,87 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // 判斷文字是否包含中文
+    function isChineseText(text) {
+        return /[\u3400-\u9FFF]/.test(text);
+    }
+
+    // 將輸入正規化為英文在前、中文在後
+    async function normalizeCardInput(englishRaw, chineseRaw) {
+        let english = englishRaw.trim();
+        let chinese = chineseRaw.trim();
+
+        // 兩邊都有值但填反時，自動交換
+        if (english && chinese && isChineseText(english) && !isChineseText(chinese)) {
+            [english, chinese] = [chinese, english];
+        }
+
+        // 只有一邊有值時，自動偵測語言並翻譯另一邊
+        if (english && !chinese) {
+            if (isChineseText(english)) {
+                const originalChinese = english;
+                const translatedEnglish = await translateText(originalChinese, 'zh-TW', 'en');
+                english = translatedEnglish ? translatedEnglish.trim() : '';
+                chinese = originalChinese;
+            } else {
+                const translatedChinese = await translateText(english, 'en', 'zh-TW');
+                chinese = translatedChinese ? translatedChinese.trim() : '';
+            }
+        } else if (!english && chinese) {
+            if (isChineseText(chinese)) {
+                const translatedEnglish = await translateText(chinese, 'zh-TW', 'en');
+                english = translatedEnglish ? translatedEnglish.trim() : '';
+            } else {
+                const originalEnglish = chinese;
+                const translatedChinese = await translateText(originalEnglish, 'en', 'zh-TW');
+                english = originalEnglish;
+                chinese = translatedChinese ? translatedChinese.trim() : '';
+            }
+        }
+
+        return { english, chinese };
+    }
+
+    async function autoTranslateFromSourceInput() {
+        const sourceText = englishInput.value.trim();
+        if (!sourceText) {
+            chineseInput.value = '';
+            updateTranslateButtonState();
+            return;
+        }
+
+        const normalized = await normalizeCardInput(sourceText, '');
+        if (isChineseText(sourceText)) {
+            chineseInput.value = normalized.english || '';
+        } else {
+            chineseInput.value = normalized.chinese || '';
+        }
+        updateTranslateButtonState();
+    }
+
     // 處理翻譯按鈕點擊
     translateBtn.addEventListener('click', async () => {
-        const english = englishInput.value.trim();
-        const chinese = chineseInput.value.trim();
+        const sourceText = englishInput.value.trim();
         
         translateBtn.disabled = true;
         translateBtn.textContent = '翻譯中...';
 
         try {
-            if (english && !chinese) {
-                // 英譯中
-                const translation = await translateText(english, 'en', 'zh-TW');
-                if (translation) {
-                    chineseInput.value = translation;
+            if (!sourceText) {
+                chineseInput.value = '';
+            } else {
+                const normalized = await normalizeCardInput(sourceText, '');
+                if (isChineseText(sourceText)) {
+                    chineseInput.value = normalized.english || '';
+                } else {
+                    chineseInput.value = normalized.chinese || '';
                 }
-            } else if (chinese && !english) {
-                // 中譯英
-                const translation = await translateText(chinese, 'zh-TW', 'en');
-                if (translation) {
-                    englishInput.value = translation;
-                }
+            }
+
+            if (!chineseInput.value && sourceText) {
+                alert('翻譯失敗，請確認輸入內容');
+            } else {
+                updateTranslateButtonState();
             }
         } catch (error) {
             console.error('翻譯過程出錯:', error);
@@ -879,18 +954,57 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 監聽輸入框變化，控制翻譯按鈕狀態
     function updateTranslateButtonState() {
-        const english = englishInput.value.trim();
-        const chinese = chineseInput.value.trim();
-        
-        // 只有當其中一個輸入框有內容而另一個為空時，才啟用翻譯按鈕
-        translateBtn.disabled = !((english && !chinese) || (!english && chinese));
+        const sourceText = englishInput.value.trim();
+        translateBtn.disabled = !sourceText;
     }
 
-    englishInput.addEventListener('input', updateTranslateButtonState);
-    chineseInput.addEventListener('input', updateTranslateButtonState);
+    englishInput.addEventListener('input', () => {
+        updateTranslateButtonState();
+        if (translationDebounceTimer) {
+            clearTimeout(translationDebounceTimer);
+        }
+        translationDebounceTimer = setTimeout(() => {
+            autoTranslateFromSourceInput().catch(error => {
+                console.error('自動翻譯失敗:', error);
+            });
+        }, 400);
+    });
 
     // 初始化翻譯按鈕狀態
     updateTranslateButtonState();
+
+    // 一鍵貼上到輸入框
+    pasteInputBtn.addEventListener('click', async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text || !text.trim()) {
+                alert('剪貼簿沒有可貼上的內容');
+                return;
+            }
+
+            englishInput.value = text.trim();
+            await autoTranslateFromSourceInput();
+        } catch (error) {
+            console.error('貼上失敗:', error);
+            alert('貼上失敗，請確認瀏覽器已允許剪貼簿權限');
+        }
+    });
+
+    // 一鍵複製翻譯結果
+    copyTranslationBtn.addEventListener('click', async () => {
+        try {
+            const translation = chineseInput.value.trim();
+            if (!translation) {
+                alert('目前沒有可複製的翻譯結果');
+                return;
+            }
+
+            await navigator.clipboard.writeText(translation);
+        } catch (error) {
+            console.error('複製失敗:', error);
+            alert('複製失敗，請稍後再試');
+        }
+    });
 
     // Supabase 相关函数
     async function saveToSupabase() {

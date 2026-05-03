@@ -31,6 +31,12 @@ body {
     border-radius: 4px;
 }
 
+.add-card-section input[readonly] {
+    background-color: #f5f5f5;
+    color: #666;
+    cursor: not-allowed;
+}
+
 button {
     background-color: #4CAF50;
     color: white;
@@ -251,6 +257,11 @@ body.dark-mode .add-card-section input {
     color: #ffffff;
 }
 
+body.dark-mode .add-card-section input[readonly] {
+    background-color: #222;
+    color: #b3b3b3;
+}
+
 body.dark-mode .input-container input[type="number"] {
     background-color: #1a1a1a;
     border-color: #404040;
@@ -308,8 +319,33 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 .input-group {
     position: relative;
     display: flex;
+    flex-direction: column;
     gap: 10px;
+}
+
+.input-row {
+    display: flex;
     align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.input-row input {
+    flex: 1;
+}
+
+.input-action-btn {
+    background-color: #607d8b;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.input-action-btn:hover {
+    background-color: #546e7a;
 }
 
 .translate-btn {
@@ -339,8 +375,8 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 
 .input-group {
     display: flex;
+    flex-direction: column;
     gap: 10px;
-    align-items: center;
 }
 
 .translate-btn {
@@ -388,6 +424,14 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 body.dark-mode .checkbox-container {
     background-color: #2d2d2d;
     color: #ffffff;
+}
+
+body.dark-mode .input-action-btn {
+    background-color: #455a64;
+}
+
+body.dark-mode .input-action-btn:hover {
+    background-color: #37474f;
 }
 
 /* 隱藏新增單詞卡區塊的樣式 */
