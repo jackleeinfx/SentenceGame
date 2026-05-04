@@ -782,7 +782,7 @@ body.dark-mode .delete-btn:hover {
     color: #333;
     white-space: pre-wrap;
     word-break: break-word;
-    max-height: 280px;
+    max-height: min(72vh, 720px);
     overflow-y: auto;
 }
 

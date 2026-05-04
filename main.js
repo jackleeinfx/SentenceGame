@@ -59,11 +59,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const articleTrendingBtn = document.getElementById('articleTrendingBtn');
     const articleSearchResults = document.getElementById('articleSearchResults');
 
-    /** 一鍵存入與列表內文上限（字元） */
-    const ARTICLE_CARD_MAX = 1000;
+    /** 一鍵存入字串上限（翻譯負擔） */
+    const ARTICLE_CARD_MAX = 2000;
+    /** 預覽／從原文頁抓回的字數上限（盡量接近全文） */
+    const ARTICLE_BODY_DISPLAY_MAX = 16000;
     const NEWS_RSS_FETCH = 10;
     const NEWS_DISPLAY = 8;
-    /** 隨機熱門：多個美／加主題 RSS 合併後去重、洗牌 */
+    /** 隨機精選：自多個 Guardian 分區並行取稿後去重、洗牌 */
     const NEWS_TRENDING_FEEDS_PER_FETCH = 4;
     const NEWS_TRENDING_ITEMS_PER_FEED = 8;
     const NEWS_TRENDING_SHOW = 6;
@@ -912,55 +914,54 @@ document.addEventListener('DOMContentLoaded', async () => {
         return e instanceof Error ? e : new Error(msg);
     }
 
-    /** 免 API Key；將 RSS URL 轉成 JSON（瀏覽器可直接 fetch，有免費額度） */
-    const RSS2JSON_API = 'https://api.rss2json.com/v1/api.json';
-
-    const RSS_NEWS_FEEDS_EN = [
-        'https://feeds.bbci.co.uk/news/world/rss.xml',
-        'https://feeds.bbci.co.uk/news/business/rss.xml',
-        'https://feeds.bbci.co.uk/news/technology/rss.xml',
-        'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
-        'https://www.theguardian.com/world/rss',
-        'https://www.theguardian.com/business/rss',
-        'https://www.theguardian.com/technology/rss',
-        'https://www.theguardian.com/politics/rss',
-        'https://rss.cnn.com/rss/edition.rss'
-    ];
-
-    const RSS_NEWS_FEEDS_ZH = [
-        'https://www.cna.com.tw/list/aall.xml',
-        'https://news.ltn.com.tw/rss/all.xml',
-        'https://news.ltn.com.tw/rss/world.xml',
-        'https://feeds.feedburner.com/technews/full',
-        'https://www.chinatimes.com/rss/realtimenews.xml'
-    ];
-
-    /** 隨機熱門：美／加與財經科技政治相關英文來源 */
-    const RSS_TRENDING_FEEDS_EN = [
-        'https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
-        'https://feeds.bbci.co.uk/news/business/rss.xml',
-        'https://feeds.bbci.co.uk/news/technology/rss.xml',
-        'https://www.theguardian.com/world/rss',
-        'https://www.theguardian.com/politics/rss',
-        'https://www.theguardian.com/business/rss'
+    /**
+     * The Guardian Open Platform：https://open-platform.theguardian.com/
+     * 內建 developer 用 api-key=test（有流量上限）；正式使用請至官網申請金鑰並替換 GUARDIAN_API_KEY。
+     */
+    const GUARDIAN_API_ROOT = 'https://content.guardianapis.com';
+    const GUARDIAN_API_KEY = 'test';
+    const GUARDIAN_SECTION_POOL = [
+        'world',
+        'business',
+        'technology',
+        'politics',
+        'environment',
+        'culture',
+        'sport',
+        'science',
+        'global-development'
     ];
 
     function normalizeWhitespace(s) {
         return (s || '').replace(/\s+/g, ' ').trim();
     }
 
+    /** 僅在標題重複出現兩次以上時才壓掉，避免整段只剩標題時被刪光 */
     function dedupeRepeatedTitle(text, title) {
         if (!title || !text) {
             return normalizeWhitespace(text);
         }
         let t = normalizeWhitespace(text);
         const esc = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        t = t.replace(new RegExp(esc, 'gi'), ' ').replace(/\s+/g, ' ').trim();
-        return t;
+        const re = new RegExp(esc, 'gi');
+        if (t.split(re).length <= 2) {
+            return t;
+        }
+        return t.replace(re, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    /** 摘要常只給前段＋「繼續閱讀」— 需改抓原文頁 */
+    function rssTextLooksLikeTeaserOrTruncated(text) {
+        if (!text || text.trim().length < 220) {
+            return true;
+        }
+        return /(繼續閱讀|继续阅读|繼續閲讀|閱讀全文|閱讀更多|閱讀整篇|看更多|詳全文|Read more|Continue reading|Full (article|story|coverage)|View full coverage|…\s*$)/i.test(
+            text
+        );
     }
 
     /**
-     * 從 RSS item 的 description / content HTML 抽出較短摘要（列表或備援）。
+     * 從 description / content HTML 抽出較短摘要（列表或備援）。
      */
     function extractArticleHtmlSnippet(descriptionHtml, itemTitle) {
         if (!descriptionHtml || !String(descriptionHtml).trim()) {
@@ -1003,20 +1004,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         return clipForStorage(full, NEWS_SNIPPET_MAX);
     }
 
-    /** 從 RSS HTML 抽出較長正文（rss2json 的 content 常含整段報導） */
+    /** 從 HTML 抽出較長正文（API 內嵌欄位有時仍只有摘要） */
     function extractArticleHtmlBodyLong(descriptionHtml, itemTitle) {
         if (!descriptionHtml || !String(descriptionHtml).trim()) {
             return '';
         }
         const raw = String(descriptionHtml);
         if (!raw.includes('<')) {
-            return clipForStorage(dedupeRepeatedTitle(raw.trim(), itemTitle), ARTICLE_CARD_MAX);
+            return clipForStorage(dedupeRepeatedTitle(raw.trim(), itemTitle), ARTICLE_BODY_DISPLAY_MAX);
         }
         const doc = new DOMParser().parseFromString(raw, 'text/html');
-        doc.querySelectorAll('script, style, noscript, iframe').forEach((el) => el.remove());
+        doc.querySelectorAll('script, style, noscript, iframe, nav, aside, footer, form').forEach((el) => el.remove());
         let full = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
+        const fromPs = Array.from(doc.querySelectorAll('p'))
+            .map((p) => normalizeWhitespace(p.textContent || ''))
+            .filter((s) => s.length > 30)
+            .join('\n\n');
+        if (fromPs.length > full.length + 40) {
+            full = fromPs;
+        }
         full = dedupeRepeatedTitle(full, itemTitle);
-        return clipForStorage(full, ARTICLE_CARD_MAX);
+        return clipForStorage(full, ARTICLE_BODY_DISPLAY_MAX);
     }
 
     function stripReaderResponseNoise(text) {
@@ -1073,10 +1081,11 @@ document.addEventListener('DOMContentLoaded', async () => {
      * 向新聞條目連結請求可讀正文。
      * news.google.com 的內部連結若經 allorigins/corsproxy 常得到整頁 SPA HTML，故只走 Jina Reader。
      */
-    async function fetchNewsPageReaderText(pageUrl) {
+    async function fetchNewsPageReaderText(pageUrl, maxChars) {
         if (!pageUrl) {
             return '';
         }
+        const cap = typeof maxChars === 'number' && maxChars > 0 ? maxChars : ARTICLE_BODY_DISPLAY_MAX;
         const enc = encodeURIComponent(pageUrl);
         const isGNews = isGoogleNewsArticleUrl(pageUrl);
         const attemptUrls = isGNews
@@ -1085,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         for (const u of attemptUrls) {
             try {
-                const r = await fetchWithTimeout(u, {}, 12000);
+                const r = await fetchWithTimeout(u, {}, isGNews ? 18000 : 16000);
                 if (!r.ok) {
                     continue;
                 }
@@ -1118,72 +1127,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (/<script[^>]*>/i.test(t) && t.length > 5000) {
                     continue;
                 }
-                return clipForStorage(t, ARTICLE_CARD_MAX);
+                return clipForStorage(t, cap);
             } catch {
                 /* try next */
             }
         }
         return '';
-    }
-
-    async function fetchRss2JsonFeed(rssUrl) {
-        const u = `${RSS2JSON_API}?rss_url=${encodeURIComponent(rssUrl)}`;
-        const r = await fetchWithTimeout(u, {}, 16000);
-        if (!r.ok) {
-            throw new Error('rss2json HTTP ' + r.status);
-        }
-        const j = await r.json();
-        if (j.status !== 'ok') {
-            throw new Error(j.message || 'rss2json 失敗');
-        }
-        const feedTitle = (j.feed && j.feed.title) || '';
-        return (j.items || [])
-            .map((it) => ({
-                title: (it.title || '').trim(),
-                link: (it.link || '').trim(),
-                pubDate: it.pubDate || '',
-                descriptionRaw: String(it.content || it.description || '').trim(),
-                sourceName: feedTitle
-            }))
-            .filter((x) => x.title && x.link);
-    }
-
-    function rssPlainHaystack(descriptionRaw) {
-        if (!descriptionRaw) {
-            return '';
-        }
-        if (!String(descriptionRaw).includes('<')) {
-            return String(descriptionRaw);
-        }
-        const doc = new DOMParser().parseFromString(String(descriptionRaw), 'text/html');
-        return normalizeWhitespace(doc.body?.textContent || '');
-    }
-
-    function itemMatchesQuery(item, query) {
-        const q = query.trim().toLowerCase();
-        if (!q) {
-            return true;
-        }
-        const hay = `${item.title}\n${rssPlainHaystack(item.descriptionRaw)}`.toLowerCase();
-        return q
-            .split(/\s+/)
-            .filter(Boolean)
-            .every((p) => hay.includes(p.toLowerCase()));
-    }
-
-    function mapFeedItemToNews(it, langKey) {
-        return {
-            title: it.title,
-            link: it.link,
-            url: it.link,
-            pubDate: it.pubDate,
-            descriptionRaw: it.descriptionRaw,
-            sourceName: it.sourceName,
-            newsLang: langKey,
-            kind: 'news',
-            extract: null,
-            newsSnippetDisplay: null
-        };
     }
 
     function shuffleArray(arr) {
@@ -1195,32 +1144,76 @@ document.addEventListener('DOMContentLoaded', async () => {
         return a;
     }
 
-    /** 點選後：優先從 RSS 內嵌 HTML 抽出正文；太短再試原文（非 Google News 連結） */
-    async function fetchFullNewsBodyForItem(item) {
-        let body = extractArticleHtmlBodyLong(item.descriptionRaw || '', item.title);
-        if (item.title) {
-            body = dedupeRepeatedTitle(body, item.title);
-        }
-        if ((!body || body.length < 40) && item.url && !isGoogleNewsArticleUrl(item.url)) {
-            const extra = await fetchNewsPageReaderText(item.url);
-            if (extra && extra.length > 40) {
-                body = extra;
-            }
-        }
-        if (!body || body.length < 15) {
-            body = extractArticleHtmlSnippet(item.descriptionRaw || '', item.title);
-        }
-        item.newsSnippetDisplay = clipForStorage(body, ARTICLE_CARD_MAX);
+    function mapGuardianApiResultToNews(r) {
+        const fields = r.fields || {};
+        const bodyHtml = String(fields.body || '').trim();
+        const trail = String(fields.trailText || '').trim();
+        const descriptionRaw = [bodyHtml, trail].filter(Boolean).join('\n\n');
+        const url = (r.webUrl || '').trim();
+        const src = `The Guardian${r.sectionName ? ' · ' + r.sectionName : ''}`;
+        return {
+            title: (r.webTitle || '').trim(),
+            link: url,
+            rssAggUrl: '',
+            url,
+            pubDate: r.webPublicationDate || '',
+            descriptionRaw,
+            sourceName: src,
+            newsLang: 'news_en',
+            kind: 'news',
+            extract: null,
+            newsSnippetDisplay: null
+        };
     }
 
-    /** 隨機熱門：美／加與財經科技政治相關英文 RSS（經 rss2json） */
-    async function fetchTrendingNewsItems() {
-        const picks = shuffleArray(RSS_TRENDING_FEEDS_EN.slice()).slice(0, NEWS_TRENDING_FEEDS_PER_FETCH);
+    async function fetchGuardianSearchResponse(params) {
+        const u = new URL(`${GUARDIAN_API_ROOT}/search`);
+        Object.entries(params).forEach(([k, v]) => {
+            if (v != null && v !== '') {
+                u.searchParams.set(k, String(v));
+            }
+        });
+        u.searchParams.set('api-key', GUARDIAN_API_KEY);
+        const r = await fetchWithTimeout(u.toString(), {}, 20000);
+        if (!r.ok) {
+            throw new Error('Guardian HTTP ' + r.status);
+        }
+        const j = await r.json();
+        if (!j.response || j.response.status !== 'ok') {
+            const msg = (j.response && j.response.message) || j.message || 'Guardian API 錯誤';
+            throw new Error(msg);
+        }
+        return j.response;
+    }
+
+    async function searchGuardianNews(query) {
+        const resp = await fetchGuardianSearchResponse({
+            q: query.trim(),
+            'page-size': String(Math.max(NEWS_RSS_FETCH + 5, 15)),
+            'order-by': 'newest',
+            'show-fields': 'body,trailText,byline',
+            lang: 'en'
+        });
+        const results = (resp.results || []).filter(
+            (x) => x.type === 'article' && x.webTitle && x.webUrl
+        );
+        return results.slice(0, NEWS_RSS_FETCH).map(mapGuardianApiResultToNews);
+    }
+
+    async function fetchGuardianBrowseRandom() {
+        const picks = shuffleArray(GUARDIAN_SECTION_POOL.slice()).slice(0, NEWS_TRENDING_FEEDS_PER_FETCH);
         const batches = await Promise.all(
-            picks.map(async (rssUrl) => {
+            picks.map(async (section) => {
                 try {
-                    const rows = await fetchRss2JsonFeed(rssUrl);
-                    return rows.slice(0, NEWS_TRENDING_ITEMS_PER_FEED);
+                    const resp = await fetchGuardianSearchResponse({
+                        section,
+                        'page-size': String(NEWS_TRENDING_ITEMS_PER_FEED),
+                        'order-by': 'newest',
+                        'show-fields': 'body,trailText'
+                    });
+                    return (resp.results || []).filter(
+                        (x) => x.type === 'article' && x.webTitle && x.webUrl
+                    );
                 } catch {
                     return [];
                 }
@@ -1229,7 +1222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         let merged = batches.flat();
         const seen = new Set();
         merged = merged.filter((row) => {
-            const k = row.link || row.title;
+            const k = row.id || row.webUrl;
             if (!k || seen.has(k)) {
                 return false;
             }
@@ -1237,40 +1230,46 @@ document.addEventListener('DOMContentLoaded', async () => {
             return true;
         });
         merged = shuffleArray(merged);
-        return merged.slice(0, NEWS_TRENDING_SHOW).map((it) => mapFeedItemToNews(it, 'news_en'));
+        return merged.slice(0, NEWS_TRENDING_SHOW).map(mapGuardianApiResultToNews);
     }
 
-    /** 多個 RSS 合併後依關鍵字篩選（rss2json，非 Google News） */
-    async function searchRssNews(langKey, query) {
-        const feeds = langKey === 'news_zh' ? RSS_NEWS_FEEDS_ZH : RSS_NEWS_FEEDS_EN;
-        const pickCount = Math.min(6, feeds.length);
-        const picks = shuffleArray(feeds.slice()).slice(0, pickCount);
-        const batches = await Promise.all(
-            picks.map(async (rssUrl) => {
-                try {
-                    return await fetchRss2JsonFeed(rssUrl);
-                } catch {
-                    return [];
-                }
-            })
-        );
-        let merged = batches.flat();
-        const seen = new Set();
-        merged = merged.filter((row) => {
-            const k = row.link || row.title;
-            if (!k || seen.has(k)) {
-                return false;
+    /** 點選後：API 內嵌正文為主；過短時改抓原文頁（Jina 等） */
+    async function fetchFullNewsBodyForItem(item) {
+        let body = extractArticleHtmlBodyLong(item.descriptionRaw || '', item.title);
+        if (item.title) {
+            body = dedupeRepeatedTitle(body, item.title);
+        }
+
+        const pub = item.url && !isGoogleNewsArticleUrl(item.url) ? item.url : '';
+        const needRemote =
+            rssTextLooksLikeTeaserOrTruncated(body) || !body || body.length < 400;
+
+        if (needRemote && pub) {
+            const remote = await fetchNewsPageReaderText(pub, ARTICLE_BODY_DISPLAY_MAX);
+            if (remote && remote.length > (body || '').length + 120) {
+                body = remote;
             }
-            seen.add(k);
-            return true;
-        });
-        merged = merged.filter((row) => itemMatchesQuery(row, query));
-        merged.sort((a, b) => {
-            const da = Date.parse(a.pubDate) || 0;
-            const db = Date.parse(b.pubDate) || 0;
-            return db - da;
-        });
-        return merged.slice(0, NEWS_RSS_FETCH).map((it) => mapFeedItemToNews(it, langKey));
+        }
+
+        if (rssTextLooksLikeTeaserOrTruncated(body) && item.rssAggUrl && isGoogleNewsArticleUrl(item.rssAggUrl)) {
+            const gText = await fetchNewsPageReaderText(item.rssAggUrl, ARTICLE_BODY_DISPLAY_MAX);
+            const cleaned = truncateBeforeHtmlShell(stripReaderResponseNoise(gText || ''));
+            if (cleaned && cleaned.length > (body || '').length + 80) {
+                body = cleaned;
+            }
+        }
+
+        if (item.title) {
+            body = dedupeRepeatedTitle(body || '', item.title);
+        }
+        if (!body || body.length < 15) {
+            body = extractArticleHtmlSnippet(item.descriptionRaw || '', item.title);
+        }
+        item.newsSnippetDisplay = clipForStorage(body, ARTICLE_BODY_DISPLAY_MAX);
+    }
+
+    async function fetchTrendingNewsItems() {
+        return fetchGuardianBrowseRandom();
     }
 
     function clipForStorage(text, maxChars) {
@@ -1343,7 +1342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
-        setNewsBodyText('正在整理 RSS 內文…', true);
+        setNewsBodyText('正在載入：先讀 API 內文，若為摘要則改抓原文全文…', true);
         fetchFullNewsBodyForItem(item)
             .then(() => {
                 if (detailPanel.dataset.detailKey !== urlKey) {
@@ -1504,19 +1503,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function runArticleSearch() {
         const q = articleSearchInput.value.trim();
-        if (!q) {
-            articleSearchResults.innerHTML = '<p class="article-results-empty">請輸入關鍵字</p>';
+        const mode = articleSourceSelect.value;
+        if (mode === 'guardian_search' && !q) {
+            articleSearchResults.innerHTML = '<p class="article-results-empty">「關鍵字搜尋」請輸入關鍵字</p>';
             return;
         }
 
-        const source = articleSourceSelect.value;
         articleSearchBtn.disabled = true;
         const prevLabel = articleSearchBtn.textContent;
         articleSearchBtn.textContent = '搜尋中…';
         articleSearchResults.innerHTML = '<p class="article-results-loading">搜尋中…</p>';
 
         try {
-            const items = await searchRssNews(source, q);
+            const items =
+                mode === 'guardian_browse' && !q
+                    ? await fetchGuardianBrowseRandom()
+                    : await searchGuardianNews(q);
             renderArticleResults(items.slice(0, NEWS_DISPLAY));
         } catch (e) {
             console.error(e);
@@ -1552,13 +1554,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (articleTrendingBtn) {
             articleTrendingBtn.textContent = '載入中…';
         }
-        articleSearchResults.innerHTML = '<p class="article-results-loading">載入美／加財經科技政治等主題並隨機挑選…</p>';
+        articleSearchResults.innerHTML =
+            '<p class="article-results-loading">自 The Guardian 多個分區載入最新文章並隨機挑選…</p>';
 
         try {
             const items = await fetchTrendingNewsItems();
             renderNewsPickList(
                 items,
-                '以下為美／加相關英文版路（BBC／Guardian 等）經 rss2json 隨機合併挑選。點選後以 RSS 內嵌正文為主；過短才嘗試 Jina 讀原文。'
+                '以下為 The Guardian Open Platform 多版最新精選（api-key=test 有流量上限）。點選後以 API 內嵌正文為主；過短才嘗試 Jina 讀原文。'
             );
         } catch (e) {
             console.error(e);
@@ -1572,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } finally {
             enableTrending();
             if (articleTrendingBtn) {
-                articleTrendingBtn.textContent = prevTrending || '隨機美加热門';
+                articleTrendingBtn.textContent = prevTrending || '隨機 Guardian 精選';
             }
         }
     }

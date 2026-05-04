@@ -64,15 +64,15 @@
             <div class="article-search-controls">
                 <label class="wiki-lang-label">
                     <select id="articleSource" class="wiki-lang-select">
-                        <option value="news_zh" selected>Google 新聞（繁中・較新）</option>
-                        <option value="news_en">Google 新聞（英文・較新）</option>
+                        <option value="guardian_search" selected>The Guardian：關鍵字搜尋</option>
+                        <option value="guardian_browse">The Guardian：分區最新（可不填關鍵字）</option>
                     </select>
                 </label>
-                <input type="text" id="articleSearchInput" class="article-search-input" placeholder="輸入新聞關鍵字" autocomplete="off">
+                <input type="text" id="articleSearchInput" class="article-search-input" placeholder="關鍵字（選「分區最新」可不填）" autocomplete="off">
                 <button type="button" id="articleSearchBtn" class="input-action-btn">搜尋</button>
-                <button type="button" id="articleTrendingBtn" class="input-action-btn">隨機美加热門</button>
+                <button type="button" id="articleTrendingBtn" class="input-action-btn">隨機 Guardian 精選</button>
             </div>
-            <p class="article-search-hint">新聞來源已改為 rss2json.com 轉換的多個媒體 RSS（BBC、Guardian、CNN、中央社、自由時報、科技新報等），不再使用 Google News。關鍵字會從這些來源合併後篩選標題與摘要。隨機美加热門為英文美／加相關版路。點選後主要顯示 RSS 內嵌正文；過短時才嘗試 Jina 讀原文。請用 https 本機或 GitHub Pages 開啟。一鍵存入後播放仍唸「英文」欄位。</p>
+            <p class="article-search-hint">新聞僅透過 The Guardian Open Platform API（預設 api-key=test，有流量上限；正式環境請至官網申請金鑰並改 main.js 的 GUARDIAN_API_KEY）。「關鍵字搜尋」需輸入關鍵字；「分區最新」可不填關鍵字，會自多個版別合併最新文章。隨機精選按鈕同樣走 Guardian 分區。點選條目後以 API 內嵌正文為主，過短時才嘗試 Jina 讀原文。請用 https 本機或 GitHub Pages 開啟。一鍵存入後播放仍唸「英文」欄位。</p>
             <div id="articleSearchResults" class="article-search-results" aria-live="polite"></div>
         </div>
 
