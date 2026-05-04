@@ -53,6 +53,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const playCountInput = document.getElementById('playCountInput');
     const playIntervalInput = document.getElementById('playIntervalInput');
     const playAllCardsBtn = document.getElementById('playAllCards');
+    const voiceProviderSelect = document.getElementById('voiceProviderSelect');
+    const elevenlabsOptionsRow = document.getElementById('elevenlabsOptionsRow');
+    const elevenlabsVoiceSelect = document.getElementById('elevenlabsVoiceSelect');
+    const elevenlabsModelSelect = document.getElementById('elevenlabsModelSelect');
+    const elevenlabsApiKeyInput = document.getElementById('elevenlabsApiKeyInput');
     const articleSourceSelect = document.getElementById('articleSource');
     const articleSearchInput = document.getElementById('articleSearchInput');
     const articleSearchBtn = document.getElementById('articleSearchBtn');
@@ -103,7 +108,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         displayMode: 'all',
         sortMode: 'time',
         hideAddCard: 'false',
-        darkMode: 'false'
+        darkMode: 'false',
+        voiceProvider: 'responsivevoice',
+        elevenlabsVoiceId: '21m00Tcm4TlvDq8ikWAM',
+        elevenlabsModel: 'eleven_turbo_v2_5'
     };
 
     // 從本地存儲加載現有單字卡
@@ -266,6 +274,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 darkModeBtn.classList.remove('active');
             }
         }
+
+        if (settings.voiceProvider && voiceProviderSelect) {
+            voiceProviderSelect.value = settings.voiceProvider;
+        }
+        if (settings.elevenlabsVoiceId && elevenlabsVoiceSelect) {
+            const vid = settings.elevenlabsVoiceId;
+            if ([...elevenlabsVoiceSelect.options].some((o) => o.value === vid)) {
+                elevenlabsVoiceSelect.value = vid;
+            }
+        }
+        if (settings.elevenlabsModel && elevenlabsModelSelect) {
+            const mid = settings.elevenlabsModel;
+            if ([...elevenlabsModelSelect.options].some((o) => o.value === mid)) {
+                elevenlabsModelSelect.value = mid;
+            }
+        }
+        updateElevenlabsPanelVisibility();
     }
 
     // 星級選擇功能
@@ -555,11 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 卡片雙擊事件（播放語音）
         div.addEventListener('dblclick', (e) => {
             e.stopPropagation();
-            responsiveVoice.speak(card.english, "US English Male", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1
-            });
+            speakEnglishLine(card.english);
         });
 
         return div;
@@ -638,6 +659,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 🚀 快速初始化流程
     console.log('⚡ 快速載入本地設置...');
+
+    populateElevenlabsVoiceSelect();
+    if (elevenlabsApiKeyInput && localStorage.getItem('elevenLabsApiKey')) {
+        elevenlabsApiKeyInput.value = localStorage.getItem('elevenLabsApiKey');
+    }
     
     // 1. 立即載入並應用本地設置
     const localSettings = loadLocalSettings();
@@ -855,6 +881,167 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 判斷文字是否包含中文
     function isChineseText(text) {
         return /[\u3400-\u9FFF]/.test(text);
+    }
+
+    /** ElevenLabs 預設聲線（官方預製 voice_id） */
+    const ELEVENLABS_VOICE_PRESETS = [
+        { id: '21m00Tcm4TlvDq8ikWAM', label: 'Rachel（女・沉穩）' },
+        { id: 'AZnzlk1XvdvUeBnXmlld', label: 'Domi（女・有力）' },
+        { id: 'EXAVITQu4vr4xnSDxMaL', label: 'Bella（女・柔和）' },
+        { id: 'ErXwobaYiN019PkySvjV', label: 'Antoni（男・清楚）' },
+        { id: 'MF3mGyEYCl7XYWbV9V6O', label: 'Elli（女・敘事）' },
+        { id: 'TxGEqnHWrfWFTfGW9XjX', label: 'Josh（男・年輕）' },
+        { id: 'VR6AewLTigWG4xSOukaG', label: 'Arnold（男・低沉）' },
+        { id: 'pNInz6obpgDQGcFmaJgB', label: 'Adam（男・中性）' },
+        { id: 'yoZ06aMxZJJ28mfd3POQ', label: 'Sam（男・播報）' }
+    ];
+
+    const ELEVENLABS_TTS_MAX_CHARS = 2500;
+
+    let currentTtsAudio = null;
+    let currentTtsObjectUrl = null;
+
+    function populateElevenlabsVoiceSelect() {
+        if (!elevenlabsVoiceSelect || elevenlabsVoiceSelect.options.length > 0) {
+            return;
+        }
+        ELEVENLABS_VOICE_PRESETS.forEach((v) => {
+            const o = document.createElement('option');
+            o.value = v.id;
+            o.textContent = v.label;
+            elevenlabsVoiceSelect.appendChild(o);
+        });
+    }
+
+    function getVoiceProvider() {
+        return voiceProviderSelect && voiceProviderSelect.value === 'elevenlabs' ? 'elevenlabs' : 'responsivevoice';
+    }
+
+    function updateElevenlabsPanelVisibility() {
+        if (!elevenlabsOptionsRow) {
+            return;
+        }
+        elevenlabsOptionsRow.style.display = getVoiceProvider() === 'elevenlabs' ? 'flex' : 'none';
+    }
+
+    function stopElevenLabsPlayback() {
+        if (currentTtsAudio) {
+            try {
+                currentTtsAudio.pause();
+                currentTtsAudio.removeAttribute('src');
+                currentTtsAudio.load();
+            } catch {
+                /* */
+            }
+            currentTtsAudio = null;
+        }
+        if (currentTtsObjectUrl) {
+            URL.revokeObjectURL(currentTtsObjectUrl);
+            currentTtsObjectUrl = null;
+        }
+    }
+
+    async function speakEnglishElevenLabs(text) {
+        const apiKey = (elevenlabsApiKeyInput && elevenlabsApiKeyInput.value.trim()) || (localStorage.getItem('elevenLabsApiKey') || '').trim();
+        if (!apiKey) {
+            throw new Error('請在「API Key（僅存本機）」填入 ElevenLabs 的 xi-api-key');
+        }
+        const raw = String(text || '').trim();
+        if (!raw) {
+            throw new Error('沒有可朗讀的英文內容');
+        }
+        const clip = raw.length > ELEVENLABS_TTS_MAX_CHARS ? raw.slice(0, ELEVENLABS_TTS_MAX_CHARS) : raw;
+        const voiceId =
+            (elevenlabsVoiceSelect && elevenlabsVoiceSelect.value) || ELEVENLABS_VOICE_PRESETS[0].id;
+        const modelId =
+            (elevenlabsModelSelect && elevenlabsModelSelect.value) || 'eleven_turbo_v2_5';
+
+        stopElevenLabsPlayback();
+
+        const url = `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`;
+        const r = await fetchWithTimeout(
+            url,
+            {
+                method: 'POST',
+                headers: {
+                    'xi-api-key': apiKey,
+                    'Content-Type': 'application/json',
+                    Accept: 'audio/mpeg'
+                },
+                body: JSON.stringify({
+                    text: clip,
+                    model_id: modelId
+                })
+            },
+            60000
+        );
+        if (!r.ok) {
+            let detail = '';
+            try {
+                const j = await r.json();
+                if (j.detail) {
+                    detail = typeof j.detail === 'string' ? j.detail : j.detail.message || JSON.stringify(j.detail);
+                } else {
+                    detail = j.message || JSON.stringify(j);
+                }
+            } catch {
+                try {
+                    detail = await r.text();
+                } catch {
+                    detail = '';
+                }
+            }
+            throw new Error(`ElevenLabs HTTP ${r.status}${detail ? '：' + String(detail).slice(0, 240) : ''}`);
+        }
+        const blob = await r.blob();
+        const objUrl = URL.createObjectURL(blob);
+        currentTtsObjectUrl = objUrl;
+        const audio = new Audio(objUrl);
+        currentTtsAudio = audio;
+        return new Promise((resolve, reject) => {
+            audio.onended = () => {
+                stopElevenLabsPlayback();
+                resolve();
+            };
+            audio.onerror = () => {
+                stopElevenLabsPlayback();
+                reject(new Error('音訊播放失敗'));
+            };
+            audio.play().catch((err) => {
+                stopElevenLabsPlayback();
+                reject(err);
+            });
+        });
+    }
+
+    function speakEnglishLine(text, options = {}) {
+        const { onend } = options;
+        if (getVoiceProvider() === 'elevenlabs') {
+            speakEnglishElevenLabs(text)
+                .then(() => {
+                    if (onend) {
+                        onend();
+                    }
+                })
+                .catch((err) => {
+                    console.error(err);
+                    alert(err.message || 'ElevenLabs 播放失敗');
+                    if (onend) {
+                        onend();
+                    }
+                });
+            return;
+        }
+        if (typeof responsiveVoice !== 'undefined') {
+            responsiveVoice.speak(text, 'US English Male', {
+                pitch: 1,
+                rate: 0.9,
+                volume: 1,
+                onend: onend || (() => {})
+            });
+        } else if (onend) {
+            onend();
+        }
     }
 
     // 將輸入正規化為英文在前、中文在後
@@ -1502,7 +1689,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function runArticleSearch() {
-        const q = articleSearchInput.value.trim();
+        let q = articleSearchInput.value.trim();
         const mode = articleSourceSelect.value;
         if (mode === 'guardian_search' && !q) {
             articleSearchResults.innerHTML = '<p class="article-results-empty">「關鍵字搜尋」請輸入關鍵字</p>';
@@ -1511,6 +1698,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         articleSearchBtn.disabled = true;
         const prevLabel = articleSearchBtn.textContent;
+
+        if (q && isChineseText(q)) {
+            articleSearchBtn.textContent = '翻譯關鍵字…';
+            articleSearchResults.innerHTML = '<p class="article-results-loading">偵測到中文，正在譯成英文以便搜尋 Guardian…</p>';
+            try {
+                const en = await translateText(q, 'zh-TW', 'en');
+                if (!en || !String(en).trim()) {
+                    articleSearchResults.innerHTML =
+                        '<p class="article-results-empty">關鍵字翻譯失敗，請改輸入英文或稍後再試。</p>';
+                    articleSearchBtn.disabled = false;
+                    articleSearchBtn.textContent = prevLabel;
+                    return;
+                }
+                q = String(en).trim();
+                articleSearchInput.value = q;
+            } catch (err) {
+                console.error(err);
+                articleSearchResults.innerHTML =
+                    '<p class="article-results-empty">關鍵字翻譯失敗，請稍後再試。</p>';
+                articleSearchBtn.disabled = false;
+                articleSearchBtn.textContent = prevLabel;
+                return;
+            }
+        }
+
         articleSearchBtn.textContent = '搜尋中…';
         articleSearchResults.innerHTML = '<p class="article-results-loading">搜尋中…</p>';
 
@@ -1872,6 +2084,36 @@ document.addEventListener('DOMContentLoaded', async () => {
             playIntervalInput.value = 3; // 恢復預設值
         }
     });
+
+    if (voiceProviderSelect) {
+        voiceProviderSelect.addEventListener('change', () => {
+            saveSetting('voiceProvider', voiceProviderSelect.value);
+            updateElevenlabsPanelVisibility();
+        });
+    }
+    if (elevenlabsVoiceSelect) {
+        elevenlabsVoiceSelect.addEventListener('change', () => {
+            saveSetting('elevenlabsVoiceId', elevenlabsVoiceSelect.value);
+        });
+    }
+    if (elevenlabsModelSelect) {
+        elevenlabsModelSelect.addEventListener('change', () => {
+            saveSetting('elevenlabsModel', elevenlabsModelSelect.value);
+        });
+    }
+    if (elevenlabsApiKeyInput) {
+        const persistKey = () => {
+            const v = elevenlabsApiKeyInput.value.trim();
+            if (v) {
+                localStorage.setItem('elevenLabsApiKey', v);
+            } else {
+                localStorage.removeItem('elevenLabsApiKey');
+            }
+        };
+        elevenlabsApiKeyInput.addEventListener('change', persistKey);
+        elevenlabsApiKeyInput.addEventListener('blur', persistKey);
+    }
+    updateElevenlabsPanelVisibility();
     
     // 持續播放功能
     async function playAllCards() {
@@ -1929,29 +2171,67 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     function playCardMultipleTimes(card, count, callback) {
         let playedCount = 0;
-        
-        function playOnce() {
-            if (!isPlaying || playedCount >= count) {
-                if (callback) callback();
+
+        function finishAll() {
+            if (callback) {
+                callback();
+            }
+        }
+
+        function afterOnePlaythrough() {
+            playedCount++;
+            if (!isPlaying) {
+                finishAll();
                 return;
             }
-            
-            responsiveVoice.speak(card.english, "US English Male", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1,
-                onend: () => {
-                    playedCount++;
-                    if (playedCount < count) {
-                        // 短暫間隔後重複播放同一個單字
-                        setTimeout(playOnce, 500);
-                    } else {
-                        if (callback) callback();
-                    }
-                }
-            });
+            if (playedCount < count) {
+                setTimeout(playOnce, 500);
+            } else {
+                finishAll();
+            }
         }
-        
+
+        function playOnce() {
+            if (!isPlaying || playedCount >= count) {
+                finishAll();
+                return;
+            }
+
+            if (getVoiceProvider() === 'elevenlabs') {
+                speakEnglishElevenLabs(card.english)
+                    .then(() => {
+                        if (!isPlaying) {
+                            finishAll();
+                            return;
+                        }
+                        afterOnePlaythrough();
+                    })
+                    .catch((err) => {
+                        console.error(err);
+                        alert(err.message || 'ElevenLabs 播放失敗');
+                        stopPlayback();
+                    });
+                return;
+            }
+
+            if (typeof responsiveVoice !== 'undefined') {
+                responsiveVoice.speak(card.english, 'US English Male', {
+                    pitch: 1,
+                    rate: 0.9,
+                    volume: 1,
+                    onend: () => {
+                        if (!isPlaying) {
+                            finishAll();
+                            return;
+                        }
+                        afterOnePlaythrough();
+                    }
+                });
+            } else {
+                afterOnePlaythrough();
+            }
+        }
+
         playOnce();
     }
     
@@ -1967,6 +2247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         // 停止語音播放
+        stopElevenLabsPlayback();
         if (typeof responsiveVoice !== 'undefined') {
             responsiveVoice.cancel();
         }

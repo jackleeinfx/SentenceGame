@@ -58,6 +58,26 @@
                 <input type="number" id="playIntervalInput" min="1" max="30" value="3">
                 <span>秒</span>
             </div>
+            <div class="display-mode playback-row playback-settings" style="margin-top: 8px; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <label for="voiceProviderSelect">語音引擎：</label>
+                <select id="voiceProviderSelect" class="wiki-lang-select" title="選擇 TTS 來源">
+                    <option value="responsivevoice" selected>ResponsiveVoice（內建）</option>
+                    <option value="elevenlabs">ElevenLabs</option>
+                </select>
+            </div>
+            <div id="elevenlabsOptionsRow" class="display-mode playback-row playback-settings" style="margin-top: 6px; flex-wrap: wrap; gap: 8px; align-items: center; display: none;">
+                <label for="elevenlabsVoiceSelect">ElevenLabs 聲音：</label>
+                <select id="elevenlabsVoiceSelect" class="wiki-lang-select"></select>
+                <label for="elevenlabsModelSelect">模型：</label>
+                <select id="elevenlabsModelSelect" class="wiki-lang-select" title="品質與速度權衡">
+                    <option value="eleven_turbo_v2_5">Turbo v2.5（較快）</option>
+                    <option value="eleven_multilingual_v2">Multilingual v2（較自然）</option>
+                    <option value="eleven_flash_v2_5">Flash v2.5（最快）</option>
+                </select>
+                <label for="elevenlabsApiKeyInput">API Key（僅存本機）：</label>
+                <input type="password" id="elevenlabsApiKeyInput" class="article-search-input" style="max-width: 220px;" autocomplete="off" placeholder="xi-api-key…">
+            </div>
+            <p class="article-search-hint" style="margin-top: 6px;">語音：選「ElevenLabs」時須填 API Key（只寫入本機 localStorage，不會上傳 Supabase）。若瀏覽器因 CORS 無法直連 api.elevenlabs.io，需自行架小型代理再改程式中的網址。</p>
         </div>
 
         <div class="article-search-panel">
@@ -72,7 +92,7 @@
                 <button type="button" id="articleSearchBtn" class="input-action-btn">搜尋</button>
                 <button type="button" id="articleTrendingBtn" class="input-action-btn">隨機 Guardian 精選</button>
             </div>
-            <p class="article-search-hint">新聞僅透過 The Guardian Open Platform API（預設 api-key=test，有流量上限；正式環境請至官網申請金鑰並改 main.js 的 GUARDIAN_API_KEY）。「關鍵字搜尋」需輸入關鍵字；「分區最新」可不填關鍵字，會自多個版別合併最新文章。隨機精選按鈕同樣走 Guardian 分區。點選條目後以 API 內嵌正文為主，過短時才嘗試 Jina 讀原文。請用 https 本機或 GitHub Pages 開啟。一鍵存入後播放仍唸「英文」欄位。</p>
+            <p class="article-search-hint">新聞僅透過 The Guardian Open Platform API（預設 api-key=test，有流量上限；正式環境請至官網申請金鑰並改 main.js 的 GUARDIAN_API_KEY）。「關鍵字搜尋」需輸入關鍵字；「分區最新」可不填關鍵字，會自多個版別合併最新文章。若關鍵字含中文，會先自動譯成英文再搜尋，並將輸入框更新為譯文。隨機精選按鈕同樣走 Guardian 分區。點選條目後以 API 內嵌正文為主，過短時才嘗試 Jina 讀原文。請用 https 本機或 GitHub Pages 開啟。一鍵存入後播放仍唸「英文」欄位。</p>
             <div id="articleSearchResults" class="article-search-results" aria-live="polite"></div>
         </div>
 
