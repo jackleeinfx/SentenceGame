@@ -52,27 +52,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const ratingValue = document.getElementById('ratingValue');
     const playCountInput = document.getElementById('playCountInput');
     const playIntervalInput = document.getElementById('playIntervalInput');
+    const ttsEngineSelect = document.getElementById('ttsEngineSelect');
     const playAllCardsBtn = document.getElementById('playAllCards');
-    const articleSourceSelect = document.getElementById('articleSource');
-    const articleSearchInput = document.getElementById('articleSearchInput');
-    const articleSearchBtn = document.getElementById('articleSearchBtn');
-    const articleTrendingBtn = document.getElementById('articleTrendingBtn');
-    const articleSearchResults = document.getElementById('articleSearchResults');
+    const wordTypeBtn = document.getElementById('wordTypeBtn');
+    const sentenceTypeBtn = document.getElementById('sentenceTypeBtn');
+    const filterAllBtn = document.getElementById('filterAll');
+    const filterWordBtn = document.getElementById('filterWord');
+    const filterSentenceBtn = document.getElementById('filterSentence');
 
     /** 一鍵存入字串上限（翻譯負擔） */
-    const ARTICLE_CARD_MAX = 2000;
-    /** 預覽／從原文頁抓回的字數上限（盡量接近全文） */
-    const ARTICLE_BODY_DISPLAY_MAX = 16000;
-    const NEWS_RSS_FETCH = 10;
-    const NEWS_DISPLAY = 8;
-    /** 隨機精選：自多個 Guardian 分區並行取稿後去重、洗牌 */
-    const NEWS_TRENDING_FEEDS_PER_FETCH = 4;
-    const NEWS_TRENDING_ITEMS_PER_FEED = 8;
-    const NEWS_TRENDING_SHOW = 6;
-    const NEWS_SNIPPET_MAX = 360;
-    const CORS_TIMEOUT_MS = 9000;
     let isEditMode = false;
-    let currentRating = 3;
+    let editingCardIndex = -1; // 目前正在編輯的卡片在 flashcards 中的索引；-1 表示未編輯
+    let currentRating = 1;
     let currentSortMode = 'time';
     
     // 播放控制變數
@@ -103,7 +94,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         displayMode: 'all',
         sortMode: 'time',
         hideAddCard: 'false',
-        darkMode: 'false'
+        darkMode: 'false',
+        englishTts: 'rv:US English Male',
+        cardType: 'word',
+        typeFilter: 'all'
     };
 
     // 從本地存儲加載現有單字卡
@@ -230,7 +224,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (settings.playInterval) {
             playIntervalInput.value = settings.playInterval;
         }
-        
+
+        if (settings.englishTts && ttsEngineSelect) {
+            const ok = [...ttsEngineSelect.options].some((o) => o.value === settings.englishTts);
+            if (ok) {
+                ttsEngineSelect.value = settings.englishTts;
+            }
+        }
+
         // 應用顯示模式
         if (settings.displayMode) {
             setDisplayMode(settings.displayMode, true); // skipSave = true
@@ -239,6 +240,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 應用排序模式
         if (settings.sortMode) {
             setSortMode(settings.sortMode, true); // skipSave = true
+        }
+
+        // 新增卡片類型 / type filter
+        if (settings.cardType === 'word' || settings.cardType === 'sentence') {
+            currentCardType = settings.cardType;
+            wordTypeBtn.classList.toggle('active', settings.cardType === 'word');
+            sentenceTypeBtn.classList.toggle('active', settings.cardType === 'sentence');
+        }
+
+        if (settings.typeFilter === 'word' || settings.typeFilter === 'sentence' || settings.typeFilter === 'all') {
+            setCardTypeFilter(settings.typeFilter, true); // skipSave = true
         }
         
         // 應用隱藏設置
@@ -315,6 +327,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 顯示模式控制
     let currentMode = 'all'; // 預設顯示全部
+    let currentCardType = 'word'; // 'word' | 'sentence'
+    let currentCardTypeFilter = 'all'; // 'all' | 'word' | 'sentence'
 
     function setDisplayMode(mode, skipSave = false) {
         currentMode = mode;
@@ -362,6 +376,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     showAllBtn.addEventListener('click', () => setDisplayMode('all'));
     showEnglishBtn.addEventListener('click', () => setDisplayMode('english'));
     showChineseBtn.addEventListener('click', () => setDisplayMode('chinese'));
+
+    // 分類類型選擇 (word / sentence)
+    function setCardType(type) {
+        currentCardType = type;
+        wordTypeBtn.classList.toggle('active', type === 'word');
+        sentenceTypeBtn.classList.toggle('active', type === 'sentence');
+        saveSetting('cardType', type);
+        // 選擇分類時同步切換直接顯示該分類的卡片
+        setCardTypeFilter(type);
+    }
+    wordTypeBtn.addEventListener('click', () => setCardType('word'));
+    sentenceTypeBtn.addEventListener('click', () => setCardType('sentence'));
+
+    // 類型篩選 (all / word / sentence)
+    function setCardTypeFilter(filter, skipSave = false) {
+        currentCardTypeFilter = filter;
+        [filterAllBtn, filterWordBtn, filterSentenceBtn].forEach(btn => btn.classList.remove('active'));
+        if (filter === 'word') filterWordBtn.classList.add('active');
+        else if (filter === 'sentence') filterSentenceBtn.classList.add('active');
+        else filterAllBtn.classList.add('active');
+        displayCards();
+        if (!skipSave) {
+            saveSetting('typeFilter', filter);
+        }
+    }
+    filterAllBtn.addEventListener('click', () => setCardTypeFilter('all'));
+    filterWordBtn.addEventListener('click', () => setCardTypeFilter('word'));
+    filterSentenceBtn.addEventListener('click', () => setCardTypeFilter('sentence'));
 
     // 添加編輯模式切換函數
     function toggleEditMode() {
@@ -428,8 +470,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 顯示所有已存在的單字卡
     function displayCards() {
         cardsContainer.innerHTML = '';
-        const sortedCards = sortCards(currentSortMode);
-        
+        let sortedCards = sortCards(currentSortMode);
+
+        // 套用類型篩選（全部 / 單詞 / 長句）
+        if (currentCardTypeFilter !== 'all') {
+            sortedCards = sortedCards.filter(c => c.card_type === currentCardTypeFilter);
+        }
+
         sortedCards.forEach((card, index) => {
             // 找到原始索引用於刪除和編輯操作
             const originalIndex = flashcards.findIndex(c => 
@@ -449,7 +496,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const cardRating = document.createElement('div');
         cardRating.className = 'card-rating';
         const rating = card.rating || 0;
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 3; i++) {
             const star = document.createElement('span');
             star.className = `star ${i <= rating ? 'filled' : 'empty'}`;
             star.innerHTML = '★';
@@ -466,7 +513,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         .from('user_cards')
                         .update({ rating: newRating })
                         .eq('english', card.english)
-                        .eq('chinese', card.chinese);
+                        .eq('chinese', card.chinese)
+                        .eq('card_type', card.card_type || 'word');
                     
                     if (error) throw error;
                     
@@ -486,6 +534,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             cardRating.appendChild(star);
         }
         
+        // 添加編輯按鈕（在刪除鍵左側）
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.innerHTML = '✎';
+        editBtn.title = '編輯單詞卡';
+        editBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startEditCard(div, index, card);
+        });
+
         // 添加刪除按鈕
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'delete-btn';
@@ -509,7 +567,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     .from('user_cards')
                     .delete()
                     .eq('english', cardToDelete.english)
-                    .eq('chinese', cardToDelete.chinese);
+                    .eq('chinese', cardToDelete.chinese)
+                    .eq('card_type', cardToDelete.card_type || 'word');
                 
                 if (error) {
                     throw error;
@@ -535,11 +594,59 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="chinese">${card.chinese}</div>
         `;
         
+        // 分類徽章（點擊可切換 單詞/長句）
+        const typeBadge = document.createElement('span');
+        typeBadge.className = 'card-type-badge ' + (card.card_type === 'sentence' ? 'sentence' : 'word');
+        typeBadge.textContent = card.card_type === 'sentence' ? '長句' : '單詞';
+        typeBadge.title = '點擊切換分類';
+        typeBadge.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const nextType = card.card_type === 'sentence' ? 'word' : 'sentence';
+            try {
+                const { error } = await supabaseClient
+                    .from('user_cards')
+                    .update({ card_type: nextType })
+                    .eq('english', card.english)
+                    .eq('chinese', card.chinese)
+                    .eq('card_type', card.card_type || 'word');
+                if (error) throw error;
+                card.card_type = nextType;
+                flashcards[index].card_type = nextType;
+                localStorage.setItem('flashcards', JSON.stringify(flashcards));
+                // 若啟用了類型篩選且新類型不符：平滑收合移除此卡，避免瞬間重繪造成的跳動
+                if (currentCardTypeFilter !== 'all' && currentCardTypeFilter !== nextType) {
+                    div.style.transition = 'max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease, padding 0.25s ease';
+                    div.style.overflow = 'hidden';
+                    div.style.maxHeight = div.offsetHeight + 'px';
+                    void div.offsetHeight; // 強制 reflow 讓過渡生效
+                    div.style.maxHeight = '0px';
+                    div.style.opacity = '0';
+                    div.style.margin = '0px';
+                    div.style.padding = '0px';
+                    setTimeout(() => {
+                        div.remove();
+                    }, 260);
+                } else {
+                    typeBadge.className = 'card-type-badge ' + (nextType === 'sentence' ? 'sentence' : 'word');
+                    typeBadge.textContent = nextType === 'sentence' ? '長句' : '單詞';
+                }
+            } catch (error) {
+                console.error('切換分類失敗:', error);
+                alert('切換分類失敗，請稍後重試');
+            }
+        });
+        div.appendChild(typeBadge);
+
         div.appendChild(cardRating); // 添加星級顯示
+        div.appendChild(editBtn);
         div.appendChild(deleteBtn);
 
         // 卡片點擊事件（單擊切換顯示）
         div.addEventListener('click', () => {
+            // 編輯中不觸發翻轉
+            if (div.classList.contains('editing')) {
+                return;
+            }
             if (div.classList.contains('showing-all')) {
                 div.classList.remove('showing-all');
                 div.classList.remove('mode-all');
@@ -555,14 +662,141 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 卡片雙擊事件（播放語音）
         div.addEventListener('dblclick', (e) => {
             e.stopPropagation();
-            responsiveVoice.speak(card.english, "US English Male", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1
-            });
+            // 編輯中不觸發播放
+            if (div.classList.contains('editing')) {
+                return;
+            }
+            speakEnglishText(card.english).catch((err) => console.error(err));
         });
 
         return div;
+    }
+
+    // 開始編輯單詞卡：在卡片內直接編輯中文與英文
+    function startEditCard(div, index, card) {
+        if (index < 0 || !flashcards[index]) {
+            return;
+        }
+        // 若有其他卡正在編輯，先還原
+        if (editingCardIndex >= 0 && editingCardIndex !== index) {
+            const prev = document.querySelector('.flashcard.editing');
+            if (prev) {
+                prev.classList.remove('editing');
+            }
+        }
+
+        editingCardIndex = index;
+        div.classList.add('editing');
+
+        // 取得英文／中文容器
+        const enEl = div.querySelector('.english');
+        const zhEl = div.querySelector('.chinese');
+
+        // 載入原始值（供取消還原）
+        const origEnglish = enEl.textContent;
+        const origChinese = zhEl.textContent;
+
+        // 將英文、中文替換為可編輯的 textarea
+        const enArea = document.createElement('textarea');
+        enArea.className = 'edit-textarea edit-en';
+        enArea.value = origEnglish;
+        const zhArea = document.createElement('textarea');
+        zhArea.className = 'edit-textarea edit-zh';
+        zhArea.value = origChinese;
+
+        // 讓 textarea 自動依內容增高，不出現捲動條
+        const fitHeight = (el) => {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        };
+        enArea.style.height = 'auto';
+        zhArea.style.height = 'auto';
+        enArea.addEventListener('input', () => fitHeight(enArea));
+        zhArea.addEventListener('input', () => fitHeight(zhArea));
+
+        enEl.replaceWith(enArea);
+        zhEl.replaceWith(zhArea);
+
+        // 等 DOM 就緒後依內容設定高度
+        requestAnimationFrame(() => {
+            fitHeight(enArea);
+            fitHeight(zhArea);
+        });
+
+        // 隱藏星級、分類徽章、編輯／刪除鍵
+        const ratingEl = div.querySelector('.card-rating');
+        const badgeEl = div.querySelector('.card-type-badge');
+        if (ratingEl) ratingEl.style.display = 'none';
+        if (badgeEl) badgeEl.style.display = 'none';
+        const oldEdit = div.querySelector('.edit-btn');
+        const oldDel = div.querySelector('.delete-btn');
+        if (oldEdit) oldEdit.style.display = 'none';
+        if (oldDel) oldDel.style.display = 'none';
+
+        // 建立儲存／取消按鈕
+        const actions = document.createElement('div');
+        actions.className = 'edit-actions';
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'input-action-btn edit-save';
+        saveBtn.textContent = '儲存';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'input-action-btn edit-cancel';
+        cancelBtn.textContent = '取消';
+        actions.appendChild(saveBtn);
+        actions.appendChild(cancelBtn);
+        div.appendChild(actions);
+
+        saveBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const newEnglish = enArea.value.trim();
+            const newChinese = zhArea.value.trim();
+            if (!newEnglish || !newChinese) {
+                alert('中文與英文都必須填寫');
+                return;
+            }
+            try {
+                const originalEnglish = origEnglish;
+                const originalChinese = origChinese;
+                const originalType = card.card_type || 'word';
+
+                const { error } = await supabaseClient
+                    .from('user_cards')
+                    .update({
+                        english: newEnglish,
+                        chinese: newChinese,
+                        rating: card.rating || 0
+                    })
+                    .eq('english', originalEnglish)
+                    .eq('chinese', originalChinese)
+                    .eq('card_type', originalType);
+
+                if (error) throw error;
+
+                // 更新本地資料
+                card.english = newEnglish;
+                card.chinese = newChinese;
+                flashcards[index].english = newEnglish;
+                flashcards[index].chinese = newChinese;
+                localStorage.setItem('flashcards', JSON.stringify(flashcards));
+
+                editingCardIndex = -1;
+                displayCards();
+                console.log('卡片已更新到 Supabase');
+            } catch (error) {
+                console.error('更新失敗:', error);
+                alert('更新失敗: ' + error.message);
+            }
+        });
+
+        cancelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            editingCardIndex = -1;
+            displayCards();
+        });
+
+        enArea.focus();
     }
 
     // 更新卡片星級顯示
@@ -574,11 +808,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function persistFlashcard(english, chinese, options = {}) {
-        const { clearForm = false } = options;
+        const { clearForm = false, cardType = currentCardType } = options;
         const newCard = {
             english,
             chinese,
-            rating: currentRating
+            rating: currentRating,
+            card_type: cardType
         };
 
         const { error } = await supabaseClient
@@ -597,14 +832,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (clearForm) {
             setFieldValue(englishInput, '');
             setFieldValue(chineseInput, '');
-            currentRating = 3;
-            updateStarDisplay(3, 'active');
-            ratingValue.textContent = '3';
+            currentRating = 1;
+            updateStarDisplay(1, 'active');
+            ratingValue.textContent = '1';
             updateTranslateButtonState();
         }
     }
 
-    // 修改添加新卡片的事件處理程序
+    // 添加新卡片
     addCardButton.addEventListener('click', async () => {
         const englishRaw = englishInput.value.trim();
         const chineseRaw = chineseInput.value.trim();
@@ -857,6 +1092,182 @@ document.addEventListener('DOMContentLoaded', async () => {
         return /[\u3400-\u9FFF]/.test(text);
     }
 
+    function cancelAllSpeechOutputs() {
+        if (typeof responsiveVoice !== 'undefined') {
+            try {
+                responsiveVoice.cancel();
+            } catch {
+                /* */
+            }
+        }
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+            try {
+                speechSynthesis.cancel();
+            } catch {
+                /* */
+            }
+        }
+    }
+
+    function ensureSpeechVoicesLoaded() {
+        return new Promise((resolve) => {
+            if (!window.speechSynthesis) {
+                resolve();
+                return;
+            }
+            const grab = () => speechSynthesis.getVoices() || [];
+            if (grab().length > 0) {
+                resolve();
+                return;
+            }
+            const onVoices = () => {
+                speechSynthesis.removeEventListener('voiceschanged', onVoices);
+                resolve();
+            };
+            speechSynthesis.addEventListener('voiceschanged', onVoices);
+            setTimeout(() => {
+                speechSynthesis.removeEventListener('voiceschanged', onVoices);
+                resolve();
+            }, 800);
+        });
+    }
+
+    /** Web Speech：英文語音，prefer 為 auto | en-US | en-GB */
+    function pickWebSpeechVoice(prefer) {
+        if (!window.speechSynthesis) {
+            return null;
+        }
+        const all = speechSynthesis.getVoices() || [];
+        const english = all.filter((v) => /^en/i.test(v.lang || ''));
+        if (english.length === 0) {
+            return null;
+        }
+        const p = (prefer || 'auto').toLowerCase();
+        if (p === 'en-us') {
+            const x = english.find((v) => (v.lang || '').toLowerCase().startsWith('en-us'));
+            if (x) {
+                return x;
+            }
+        }
+        if (p === 'en-gb') {
+            const x = english.find((v) => (v.lang || '').toLowerCase().startsWith('en-gb'));
+            if (x) {
+                return x;
+            }
+        }
+        const rank = (v) => {
+            const n = `${v.name} ${v.voiceURI || ''}`.toLowerCase();
+            let s = 0;
+            if (n.includes('google')) {
+                s += 6;
+            }
+            if (n.includes('premium') || n.includes('enhanced')) {
+                s += 5;
+            }
+            if (n.includes('siri')) {
+                s += 4;
+            }
+            if (/(samantha|karen|daniel|moira|aaron|flo|zira|matthew|aria)/i.test(n)) {
+                s += 3;
+            }
+            if (n.includes('microsoft')) {
+                s += 2;
+            }
+            return s;
+        };
+        return [...english].sort((a, b) => rank(b) - rank(a))[0];
+    }
+
+    async function speakEnglishTextWithWebSpeech(text, prefer, finish) {
+        if (!window.speechSynthesis) {
+            if (typeof responsiveVoice !== 'undefined') {
+                responsiveVoice.speak(text, 'US English Male', {
+                    pitch: 1,
+                    rate: 0.9,
+                    volume: 1,
+                    onend: finish
+                });
+            } else {
+                finish();
+            }
+            return;
+        }
+        await ensureSpeechVoicesLoaded();
+        const u = new SpeechSynthesisUtterance(text);
+        const v = pickWebSpeechVoice(prefer);
+        if (v) {
+            u.voice = v;
+            u.lang = v.lang || (prefer === 'en-gb' ? 'en-GB' : 'en-US');
+        } else {
+            u.lang = prefer === 'en-gb' ? 'en-GB' : 'en-US';
+        }
+        u.rate = 0.9;
+        u.pitch = 1;
+        u.volume = 1;
+        u.onend = finish;
+        u.onerror = finish;
+        speechSynthesis.speak(u);
+    }
+
+    function speakEnglishText(text, options = {}) {
+        const trimmed = (text || '').trim();
+        return new Promise((resolve) => {
+            const finish = () => {
+                try {
+                    if (typeof options.onend === 'function') {
+                        options.onend();
+                    }
+                } finally {
+                    resolve();
+                }
+            };
+
+            if (!trimmed) {
+                finish();
+                return;
+            }
+
+            cancelAllSpeechOutputs();
+
+            const raw =
+                (ttsEngineSelect && ttsEngineSelect.value) ||
+                localStorage.getItem('englishTts') ||
+                'rv:US English Male';
+
+            if (raw.startsWith('rv:')) {
+                const voiceName = raw.slice(3);
+                if (typeof responsiveVoice !== 'undefined') {
+                    responsiveVoice.speak(trimmed, voiceName, {
+                        pitch: 1,
+                        rate: 0.9,
+                        volume: 1,
+                        onend: finish
+                    });
+                    return;
+                }
+                void speakEnglishTextWithWebSpeech(trimmed, 'auto', finish);
+                return;
+            }
+
+            if (raw.startsWith('ws:')) {
+                const prefer = raw.slice(3);
+                void speakEnglishTextWithWebSpeech(trimmed, prefer, finish);
+                return;
+            }
+
+            if (typeof responsiveVoice !== 'undefined') {
+                responsiveVoice.speak(trimmed, 'US English Male', {
+                    pitch: 1,
+                    rate: 0.9,
+                    volume: 1,
+                    onend: finish
+                });
+            } else {
+                void speakEnglishTextWithWebSpeech(trimmed, 'auto', finish);
+            }
+        });
+    }
+
     // 將輸入正規化為英文在前、中文在後
     async function normalizeCardInput(englishRaw, chineseRaw) {
         let english = englishRaw.trim();
@@ -892,723 +1303,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         return { english, chinese };
     }
-
-    async function fetchWithTimeout(url, init = {}, ms = CORS_TIMEOUT_MS) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), ms);
-        try {
-            return await fetch(url, { ...init, signal: controller.signal });
-        } finally {
-            clearTimeout(timer);
-        }
-    }
-
-    function friendlyArticleSearchError(e) {
-        if (e && e.name === 'AbortError') {
-            return new Error('連線逾時（' + CORS_TIMEOUT_MS / 1000 + ' 秒），請再試一次');
-        }
-        const msg = (e && e.message) || String(e);
-        if (/failed to fetch/i.test(msg) || (e && e.name === 'TypeError')) {
-            return new Error('無法連線：可能被網路／防火牆擋下，或代理暫時不可用');
-        }
-        return e instanceof Error ? e : new Error(msg);
-    }
-
-    /**
-     * The Guardian Open Platform：https://open-platform.theguardian.com/
-     * 內建 developer 用 api-key=test（有流量上限）；正式使用請至官網申請金鑰並替換 GUARDIAN_API_KEY。
-     */
-    const GUARDIAN_API_ROOT = 'https://content.guardianapis.com';
-    const GUARDIAN_API_KEY = 'test';
-    const GUARDIAN_SECTION_POOL = [
-        'world',
-        'business',
-        'technology',
-        'politics',
-        'environment',
-        'culture',
-        'sport',
-        'science',
-        'global-development'
-    ];
-
-    function normalizeWhitespace(s) {
-        return (s || '').replace(/\s+/g, ' ').trim();
-    }
-
-    /** 僅在標題重複出現兩次以上時才壓掉，避免整段只剩標題時被刪光 */
-    function dedupeRepeatedTitle(text, title) {
-        if (!title || !text) {
-            return normalizeWhitespace(text);
-        }
-        let t = normalizeWhitespace(text);
-        const esc = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const re = new RegExp(esc, 'gi');
-        if (t.split(re).length <= 2) {
-            return t;
-        }
-        return t.replace(re, ' ').replace(/\s+/g, ' ').trim();
-    }
-
-    /** 摘要常只給前段＋「繼續閱讀」— 需改抓原文頁 */
-    function rssTextLooksLikeTeaserOrTruncated(text) {
-        if (!text || text.trim().length < 220) {
-            return true;
-        }
-        return /(繼續閱讀|继续阅读|繼續閲讀|閱讀全文|閱讀更多|閱讀整篇|看更多|詳全文|Read more|Continue reading|Full (article|story|coverage)|View full coverage|…\s*$)/i.test(
-            text
-        );
-    }
-
-    /**
-     * 從 description / content HTML 抽出較短摘要（列表或備援）。
-     */
-    function extractArticleHtmlSnippet(descriptionHtml, itemTitle) {
-        if (!descriptionHtml || !String(descriptionHtml).trim()) {
-            return '';
-        }
-        const raw = String(descriptionHtml);
-        if (!raw.includes('<')) {
-            return clipForStorage(dedupeRepeatedTitle(raw, itemTitle), NEWS_SNIPPET_MAX);
-        }
-        const doc = new DOMParser().parseFromString(raw, 'text/html');
-        const candidates = [];
-
-        doc.querySelectorAll('font').forEach((el) => {
-            const sz = el.getAttribute('size');
-            if (String(sz) === '-1') {
-                const t = normalizeWhitespace(el.textContent || '');
-                if (t.length >= 12) {
-                    candidates.push(t);
-                }
-            }
-        });
-
-        doc.querySelectorAll('p, li, td').forEach((el) => {
-            const t = normalizeWhitespace(el.textContent || '');
-            if (t.length >= 20 && t.length < 2500 && !/^https?:\/\//i.test(t)) {
-                candidates.push(t);
-            }
-        });
-
-        candidates.sort((a, b) => b.length - a.length);
-        for (const chunk of candidates) {
-            const cleaned = dedupeRepeatedTitle(chunk, itemTitle).replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim();
-            if (cleaned.length >= 20) {
-                return clipForStorage(cleaned, NEWS_SNIPPET_MAX);
-            }
-        }
-
-        let full = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
-        full = dedupeRepeatedTitle(full, itemTitle).replace(/https?:\/\/\S+/gi, ' ').replace(/\s+/g, ' ').trim();
-        return clipForStorage(full, NEWS_SNIPPET_MAX);
-    }
-
-    /** 從 HTML 抽出較長正文（API 內嵌欄位有時仍只有摘要） */
-    function extractArticleHtmlBodyLong(descriptionHtml, itemTitle) {
-        if (!descriptionHtml || !String(descriptionHtml).trim()) {
-            return '';
-        }
-        const raw = String(descriptionHtml);
-        if (!raw.includes('<')) {
-            return clipForStorage(dedupeRepeatedTitle(raw.trim(), itemTitle), ARTICLE_BODY_DISPLAY_MAX);
-        }
-        const doc = new DOMParser().parseFromString(raw, 'text/html');
-        doc.querySelectorAll('script, style, noscript, iframe, nav, aside, footer, form').forEach((el) => el.remove());
-        let full = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
-        const fromPs = Array.from(doc.querySelectorAll('p'))
-            .map((p) => normalizeWhitespace(p.textContent || ''))
-            .filter((s) => s.length > 30)
-            .join('\n\n');
-        if (fromPs.length > full.length + 40) {
-            full = fromPs;
-        }
-        full = dedupeRepeatedTitle(full, itemTitle);
-        return clipForStorage(full, ARTICLE_BODY_DISPLAY_MAX);
-    }
-
-    function stripReaderResponseNoise(text) {
-        let t = String(text || '').replace(/^\uFEFF/, '').trim();
-        if (t.startsWith('```')) {
-            const firstNl = t.indexOf('\n');
-            const close = t.lastIndexOf('```');
-            if (firstNl > 0 && close > firstNl) {
-                t = t.slice(firstNl + 1, close).trim();
-            }
-        }
-        const lines = t.split('\n');
-        const dropLine = (line) => {
-            const s = line.trimStart();
-            return /^(Title:|URL Source:|Published Time:|Markdown Content:|={3,})/i.test(s);
-        };
-        while (lines.length && (lines[0].trim() === '' || dropLine(lines[0]))) {
-            lines.shift();
-        }
-        return lines.join('\n').trim();
-    }
-
-    function isGoogleNewsArticleUrl(url) {
-        try {
-            const h = new URL(url).hostname;
-            return h === 'news.google.com' || h.endsWith('.news.google.com');
-        } catch {
-            return false;
-        }
-    }
-
-    /** Jina 有時會回「標題 + 換行 + Google 新聞整頁 HTML」，只保留 HTML 之前的可讀段 */
-    function truncateBeforeHtmlShell(t) {
-        const s = String(t || '');
-        const m = s.search(/<!doctype\s+html|<html[\s>]/i);
-        if (m > 40) {
-            return s.slice(0, m).trim();
-        }
-        return s.trim();
-    }
-
-    function readerExtractLooksLikeGoogleShell(innerText) {
-        const s = (innerText || '').slice(0, 600);
-        if (innerText && innerText.length > 12000 && innerText.includes('google-site-verification')) {
-            return true;
-        }
-        if (/news\.google\.com\/rss\/articles/i.test(s) && innerText.length > 4000) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 向新聞條目連結請求可讀正文。
-     * news.google.com 的內部連結若經 allorigins/corsproxy 常得到整頁 SPA HTML，故只走 Jina Reader。
-     */
-    async function fetchNewsPageReaderText(pageUrl, maxChars) {
-        if (!pageUrl) {
-            return '';
-        }
-        const cap = typeof maxChars === 'number' && maxChars > 0 ? maxChars : ARTICLE_BODY_DISPLAY_MAX;
-        const enc = encodeURIComponent(pageUrl);
-        const isGNews = isGoogleNewsArticleUrl(pageUrl);
-        const attemptUrls = isGNews
-            ? [`https://r.jina.ai/${enc}`]
-            : [`https://r.jina.ai/${enc}`, `https://api.allorigins.win/raw?url=${enc}`, `https://corsproxy.io/?${enc}`];
-
-        for (const u of attemptUrls) {
-            try {
-                const r = await fetchWithTimeout(u, {}, isGNews ? 18000 : 16000);
-                if (!r.ok) {
-                    continue;
-                }
-                let t = await r.text();
-                t = stripReaderResponseNoise(t);
-
-                if (t.startsWith('Title:')) {
-                    const cut = t.indexOf('\n\n');
-                    if (cut > 0 && cut < 500) {
-                        t = t.slice(cut + 2).trim();
-                    }
-                }
-
-                t = truncateBeforeHtmlShell(t);
-                t = stripReaderResponseNoise(t);
-
-                if (/^<!doctype\s+html|<html[\s>]/i.test(t.trim())) {
-                    const doc = new DOMParser().parseFromString(t, 'text/html');
-                    const inner = normalizeWhitespace(doc.body?.innerText || doc.body?.textContent || '');
-                    if (readerExtractLooksLikeGoogleShell(inner) || inner.length < 100) {
-                        continue;
-                    }
-                    t = inner;
-                }
-
-                t = stripReaderResponseNoise(t);
-                if (t.length < 45) {
-                    continue;
-                }
-                if (/<script[^>]*>/i.test(t) && t.length > 5000) {
-                    continue;
-                }
-                return clipForStorage(t, cap);
-            } catch {
-                /* try next */
-            }
-        }
-        return '';
-    }
-
-    function shuffleArray(arr) {
-        const a = arr.slice();
-        for (let i = a.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [a[i], a[j]] = [a[j], a[i]];
-        }
-        return a;
-    }
-
-    function mapGuardianApiResultToNews(r) {
-        const fields = r.fields || {};
-        const bodyHtml = String(fields.body || '').trim();
-        const trail = String(fields.trailText || '').trim();
-        const descriptionRaw = [bodyHtml, trail].filter(Boolean).join('\n\n');
-        const url = (r.webUrl || '').trim();
-        const src = `The Guardian${r.sectionName ? ' · ' + r.sectionName : ''}`;
-        return {
-            title: (r.webTitle || '').trim(),
-            link: url,
-            rssAggUrl: '',
-            url,
-            pubDate: r.webPublicationDate || '',
-            descriptionRaw,
-            sourceName: src,
-            newsLang: 'news_en',
-            kind: 'news',
-            extract: null,
-            newsSnippetDisplay: null
-        };
-    }
-
-    async function fetchGuardianSearchResponse(params) {
-        const u = new URL(`${GUARDIAN_API_ROOT}/search`);
-        Object.entries(params).forEach(([k, v]) => {
-            if (v != null && v !== '') {
-                u.searchParams.set(k, String(v));
-            }
-        });
-        u.searchParams.set('api-key', GUARDIAN_API_KEY);
-        const r = await fetchWithTimeout(u.toString(), {}, 20000);
-        if (!r.ok) {
-            throw new Error('Guardian HTTP ' + r.status);
-        }
-        const j = await r.json();
-        if (!j.response || j.response.status !== 'ok') {
-            const msg = (j.response && j.response.message) || j.message || 'Guardian API 錯誤';
-            throw new Error(msg);
-        }
-        return j.response;
-    }
-
-    async function searchGuardianNews(query) {
-        const resp = await fetchGuardianSearchResponse({
-            q: query.trim(),
-            'page-size': String(Math.max(NEWS_RSS_FETCH + 5, 15)),
-            'order-by': 'newest',
-            'show-fields': 'body,trailText,byline',
-            lang: 'en'
-        });
-        const results = (resp.results || []).filter(
-            (x) => x.type === 'article' && x.webTitle && x.webUrl
-        );
-        return results.slice(0, NEWS_RSS_FETCH).map(mapGuardianApiResultToNews);
-    }
-
-    async function fetchGuardianBrowseRandom() {
-        const picks = shuffleArray(GUARDIAN_SECTION_POOL.slice()).slice(0, NEWS_TRENDING_FEEDS_PER_FETCH);
-        const batches = await Promise.all(
-            picks.map(async (section) => {
-                try {
-                    const resp = await fetchGuardianSearchResponse({
-                        section,
-                        'page-size': String(NEWS_TRENDING_ITEMS_PER_FEED),
-                        'order-by': 'newest',
-                        'show-fields': 'body,trailText'
-                    });
-                    return (resp.results || []).filter(
-                        (x) => x.type === 'article' && x.webTitle && x.webUrl
-                    );
-                } catch {
-                    return [];
-                }
-            })
-        );
-        let merged = batches.flat();
-        const seen = new Set();
-        merged = merged.filter((row) => {
-            const k = row.id || row.webUrl;
-            if (!k || seen.has(k)) {
-                return false;
-            }
-            seen.add(k);
-            return true;
-        });
-        merged = shuffleArray(merged);
-        return merged.slice(0, NEWS_TRENDING_SHOW).map(mapGuardianApiResultToNews);
-    }
-
-    /** 點選後：API 內嵌正文為主；過短時改抓原文頁（Jina 等） */
-    async function fetchFullNewsBodyForItem(item) {
-        let body = extractArticleHtmlBodyLong(item.descriptionRaw || '', item.title);
-        if (item.title) {
-            body = dedupeRepeatedTitle(body, item.title);
-        }
-
-        const pub = item.url && !isGoogleNewsArticleUrl(item.url) ? item.url : '';
-        const needRemote =
-            rssTextLooksLikeTeaserOrTruncated(body) || !body || body.length < 400;
-
-        if (needRemote && pub) {
-            const remote = await fetchNewsPageReaderText(pub, ARTICLE_BODY_DISPLAY_MAX);
-            if (remote && remote.length > (body || '').length + 120) {
-                body = remote;
-            }
-        }
-
-        if (rssTextLooksLikeTeaserOrTruncated(body) && item.rssAggUrl && isGoogleNewsArticleUrl(item.rssAggUrl)) {
-            const gText = await fetchNewsPageReaderText(item.rssAggUrl, ARTICLE_BODY_DISPLAY_MAX);
-            const cleaned = truncateBeforeHtmlShell(stripReaderResponseNoise(gText || ''));
-            if (cleaned && cleaned.length > (body || '').length + 80) {
-                body = cleaned;
-            }
-        }
-
-        if (item.title) {
-            body = dedupeRepeatedTitle(body || '', item.title);
-        }
-        if (!body || body.length < 15) {
-            body = extractArticleHtmlSnippet(item.descriptionRaw || '', item.title);
-        }
-        item.newsSnippetDisplay = clipForStorage(body, ARTICLE_BODY_DISPLAY_MAX);
-    }
-
-    async function fetchTrendingNewsItems() {
-        return fetchGuardianBrowseRandom();
-    }
-
-    function clipForStorage(text, maxChars) {
-        const t = text.trim();
-        if (t.length <= maxChars) {
-            return t;
-        }
-        return `${t.slice(0, maxChars).trim()}…`;
-    }
-
-    function rebuildNewsCardExtract(item) {
-        if (item.kind !== 'news') {
-            return;
-        }
-        const snippet =
-            item.newsSnippetDisplay || extractArticleHtmlSnippet(item.descriptionRaw || '', item.title) || '';
-        const srcLine = item.sourceName ? `來源：${item.sourceName}` : '';
-        const bodyParts = [item.title, snippet, srcLine, item.url ? `連結：${item.url}` : ''].filter(Boolean);
-        item.extract = clipForStorage(bodyParts.join('\n\n'), ARTICLE_CARD_MAX);
-    }
-
-    function fillArticleDetailPanel(detailPanel, item) {
-        detailPanel.classList.remove('article-search-detail--empty');
-        detailPanel.innerHTML = '';
-
-        const head = document.createElement('div');
-        head.className = 'article-detail-head';
-        head.textContent = item.title;
-        detailPanel.appendChild(head);
-
-        const body = document.createElement('div');
-        body.className = 'article-detail-body';
-        detailPanel.appendChild(body);
-
-        const actions = document.createElement('div');
-        actions.className = 'article-detail-actions';
-
-        if (item.url) {
-            const link = document.createElement('a');
-            link.href = item.url;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.className = 'article-result-link';
-            link.textContent = '開啟原文';
-            actions.appendChild(link);
-        }
-
-        const saveBtn = document.createElement('button');
-        saveBtn.type = 'button';
-        saveBtn.className = 'input-action-btn article-save-btn';
-        saveBtn.textContent = '一鍵存入';
-        saveBtn.addEventListener('click', async () => {
-            await saveArticleSummaryAsCard(item);
-        });
-        actions.appendChild(saveBtn);
-        detailPanel.appendChild(actions);
-
-        const urlKey = item.url || item.title || '';
-        detailPanel.dataset.detailKey = urlKey;
-
-        function setNewsBodyText(txt, isLoading) {
-            if (detailPanel.dataset.detailKey !== urlKey) {
-                return;
-            }
-            body.textContent = txt;
-            if (isLoading) {
-                body.classList.add('article-detail-body--loading');
-            } else {
-                body.classList.remove('article-detail-body--loading');
-            }
-        }
-
-        setNewsBodyText('正在載入：先讀 API 內文，若為摘要則改抓原文全文…', true);
-        fetchFullNewsBodyForItem(item)
-            .then(() => {
-                if (detailPanel.dataset.detailKey !== urlKey) {
-                    return;
-                }
-                rebuildNewsCardExtract(item);
-                const txt = item.newsSnippetDisplay || '';
-                if (!txt || txt.length < 8) {
-                    setNewsBodyText('未取得內文，請點「開啟原文」閱讀完整報導。', false);
-                } else {
-                    setNewsBodyText(txt, false);
-                }
-            })
-            .catch(() => {
-                if (detailPanel.dataset.detailKey !== urlKey) {
-                    return;
-                }
-                setNewsBodyText('載入內文失敗，請點「開啟原文」或稍後再試。', false);
-            });
-    }
-
-    function renderNewsPickList(items, hintLine) {
-        articleSearchResults.innerHTML = '';
-
-        if (!items.length) {
-            const empty = document.createElement('p');
-            empty.className = 'article-results-empty';
-            empty.textContent = '未取得任何新聞，請稍後再試。';
-            articleSearchResults.appendChild(empty);
-            return;
-        }
-
-        const hint = document.createElement('p');
-        hint.className = 'article-results-pick-hint';
-        hint.textContent =
-            hintLine ||
-            '已載入標題（新→舊）。點選一則後會重新向原文連結請求內文並顯示在下方；若載入失敗請用「開啟原文」。';
-        articleSearchResults.appendChild(hint);
-
-        const list = document.createElement('div');
-        list.className = 'article-result-pick-list';
-
-        items.forEach((item, index) => {
-            const row = document.createElement('button');
-            row.type = 'button';
-            row.className = 'article-result-pick-row';
-            row.dataset.index = String(index);
-
-            const titleLine = document.createElement('div');
-            titleLine.className = 'article-result-pick-title';
-            titleLine.textContent = item.title;
-            row.appendChild(titleLine);
-
-            const metaParts = [];
-            if (item.pubDate) {
-                metaParts.push(item.pubDate);
-            }
-            if (item.sourceName) {
-                metaParts.push(item.sourceName);
-            }
-            if (metaParts.length) {
-                const metaLine = document.createElement('div');
-                metaLine.className = 'article-result-pick-meta';
-                metaLine.textContent = metaParts.join(' · ');
-                row.appendChild(metaLine);
-            }
-
-            list.appendChild(row);
-        });
-
-        articleSearchResults.appendChild(list);
-
-        const detail = document.createElement('div');
-        detail.className = 'article-search-detail article-search-detail--empty';
-        detail.id = 'articleSearchDetailPanel';
-        const ph = document.createElement('p');
-        ph.className = 'article-detail-placeholder';
-        ph.textContent = '請點選上方一則新聞';
-        detail.appendChild(ph);
-        articleSearchResults.appendChild(detail);
-
-        list.addEventListener('click', (e) => {
-            const row = e.target.closest('.article-result-pick-row');
-            if (!row) {
-                return;
-            }
-            const idx = Number(row.dataset.index);
-            if (Number.isNaN(idx) || !items[idx]) {
-                return;
-            }
-            list.querySelectorAll('.article-result-pick-row').forEach((r) => r.classList.remove('is-selected'));
-            row.classList.add('is-selected');
-            fillArticleDetailPanel(detail, items[idx]);
-            detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        });
-    }
-
-    function renderArticleResults(items) {
-        articleSearchResults.innerHTML = '';
-
-        if (!items.length) {
-            const p = document.createElement('p');
-            p.className = 'article-results-empty';
-            p.textContent = '沒有找到結果，請換個關鍵字或減少字數再試（多來源合併篩選）。';
-            articleSearchResults.appendChild(p);
-            return;
-        }
-
-        if (items[0].kind === 'news') {
-            renderNewsPickList(items);
-            return;
-        }
-
-        const unk = document.createElement('p');
-        unk.className = 'article-results-empty';
-        unk.textContent = '無法顯示此類結果。';
-        articleSearchResults.appendChild(unk);
-    }
-
-    async function saveArticleSummaryAsCard(item) {
-        if (!item.newsSnippetDisplay || item.newsSnippetDisplay.length < 12) {
-            try {
-                await fetchFullNewsBodyForItem(item);
-            } catch (e) {
-                console.error(e);
-            }
-        }
-        rebuildNewsCardExtract(item);
-
-        let combined = item.extract || '';
-        combined = clipForStorage(combined, ARTICLE_CARD_MAX);
-        if (!combined) {
-            alert('沒有可存入的內容');
-            return;
-        }
-
-        try {
-            let normalized;
-            if (isChineseText(combined)) {
-                normalized = await normalizeCardInput('', combined);
-            } else {
-                normalized = await normalizeCardInput(combined, '');
-            }
-
-            if (!normalized.english || !normalized.chinese) {
-                alert('翻譯失敗，請稍後再試');
-                return;
-            }
-
-            await persistFlashcard(normalized.english, normalized.chinese, {
-                clearForm: false
-            });
-        } catch (err) {
-            console.error(err);
-            alert('存入失敗：' + err.message);
-        }
-    }
-
-    async function runArticleSearch() {
-        const q = articleSearchInput.value.trim();
-        const mode = articleSourceSelect.value;
-        if (mode === 'guardian_search' && !q) {
-            articleSearchResults.innerHTML = '<p class="article-results-empty">「關鍵字搜尋」請輸入關鍵字</p>';
-            return;
-        }
-
-        articleSearchBtn.disabled = true;
-        const prevLabel = articleSearchBtn.textContent;
-        articleSearchBtn.textContent = '搜尋中…';
-        articleSearchResults.innerHTML = '<p class="article-results-loading">搜尋中…</p>';
-
-        try {
-            let searchQuery = q;
-            const needsKeyword = mode === 'guardian_search' || (mode === 'guardian_browse' && q);
-            if (needsKeyword && searchQuery && isChineseText(searchQuery)) {
-                articleSearchResults.innerHTML =
-                    '<p class="article-results-loading">正在將中文關鍵字翻譯為英文…</p>';
-                const en = await translateText(searchQuery, 'zh-TW', 'en');
-                const translated = en != null ? String(en).trim() : '';
-                if (!translated) {
-                    throw new Error('關鍵字翻譯失敗，請改輸入英文或稍後再試');
-                }
-                searchQuery = translated;
-            }
-
-            const items =
-                mode === 'guardian_browse' && !q
-                    ? await fetchGuardianBrowseRandom()
-                    : await searchGuardianNews(searchQuery);
-            renderArticleResults(items.slice(0, NEWS_DISPLAY));
-        } catch (e) {
-            console.error(e);
-            const fe = friendlyArticleSearchError(e);
-            const msg = fe && fe.message ? fe.message : String(fe);
-            articleSearchResults.innerHTML = '';
-            const errP = document.createElement('p');
-            errP.className = 'article-results-empty';
-            errP.textContent = '搜尋失敗：' + msg + '。';
-            articleSearchResults.appendChild(errP);
-        } finally {
-            articleSearchBtn.disabled = false;
-            articleSearchBtn.textContent = prevLabel;
-        }
-    }
-
-    async function runRandomTrendingNews() {
-        const disableTrending = () => {
-            if (articleTrendingBtn) {
-                articleTrendingBtn.disabled = true;
-            }
-            articleSearchBtn.disabled = true;
-        };
-        const enableTrending = () => {
-            if (articleTrendingBtn) {
-                articleTrendingBtn.disabled = false;
-            }
-            articleSearchBtn.disabled = false;
-        };
-
-        disableTrending();
-        const prevTrending = articleTrendingBtn ? articleTrendingBtn.textContent : '';
-        if (articleTrendingBtn) {
-            articleTrendingBtn.textContent = '載入中…';
-        }
-        articleSearchResults.innerHTML =
-            '<p class="article-results-loading">自 The Guardian 多個分區載入最新文章並隨機挑選…</p>';
-
-        try {
-            const items = await fetchTrendingNewsItems();
-            renderNewsPickList(
-                items,
-                '以下為 The Guardian Open Platform 多版最新精選（api-key=test 有流量上限）。點選後以 API 內嵌正文為主；過短才嘗試 Jina 讀原文。'
-            );
-        } catch (e) {
-            console.error(e);
-            const fe = friendlyArticleSearchError(e);
-            const msg = fe && fe.message ? fe.message : String(fe);
-            articleSearchResults.innerHTML = '';
-            const errP = document.createElement('p');
-            errP.className = 'article-results-empty';
-            errP.textContent = '熱門新聞載入失敗：' + msg + '。';
-            articleSearchResults.appendChild(errP);
-        } finally {
-            enableTrending();
-            if (articleTrendingBtn) {
-                articleTrendingBtn.textContent = prevTrending || '隨機 Guardian 精選';
-            }
-        }
-    }
-
-    articleSearchBtn.addEventListener('click', () => {
-        runArticleSearch().catch((e) => console.error(e));
-    });
-
-    if (articleTrendingBtn) {
-        articleTrendingBtn.addEventListener('click', () => {
-            runRandomTrendingNews().catch((e) => console.error(e));
-        });
-    }
-
-    articleSearchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            runArticleSearch().catch((err) => console.error(err));
-        }
-    });
 
     async function autoTranslateFromSourceInput() {
         const sourceText = englishInput.value.trim();
@@ -1786,7 +1480,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const pageCards = data.map(item => ({
                     english: item.english,
                     chinese: item.chinese,
-                    rating: item.rating || 0
+                    rating: item.rating || 0,
+                    card_type: item.card_type || 'word'
                 }));
 
                 flashcards = [...flashcards, ...pageCards];
@@ -1885,7 +1580,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             playIntervalInput.value = 3; // 恢復預設值
         }
     });
-    
+
+    if (ttsEngineSelect) {
+        ttsEngineSelect.addEventListener('change', () => {
+            saveSetting('englishTts', ttsEngineSelect.value);
+        });
+    }
+
     // 持續播放功能
     async function playAllCards() {
         if (isPlaying) {
@@ -1894,8 +1595,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         const sortedCards = sortCards(currentSortMode);
-        if (sortedCards.length === 0) {
-            alert('沒有單字卡可以播放');
+        // 只播放目前「類型篩選」所選分類的卡片（全部 / 單詞 / 長句）
+        const playableCards = currentCardTypeFilter === 'all'
+            ? sortedCards
+            : sortedCards.filter(c => c.card_type === currentCardTypeFilter);
+        if (playableCards.length === 0) {
+            alert('沒有可播放的單字卡');
             return;
         }
         
@@ -1904,9 +1609,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         playAllCardsBtn.textContent = '停止播放';
         playAllCardsBtn.classList.add('is-stopping');
         
-        console.log('🎵 開始播放所有單字卡');
+        console.log('🎵 開始播放目前分類的單字卡');
         
-        playNextCard(sortedCards);
+        playNextCard(playableCards);
     }
     
     function playNextCard(cards) {
@@ -1942,30 +1647,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     function playCardMultipleTimes(card, count, callback) {
         let playedCount = 0;
-        
-        function playOnce() {
+
+        async function playOnce() {
             if (!isPlaying || playedCount >= count) {
-                if (callback) callback();
+                if (callback) {
+                    callback();
+                }
                 return;
             }
-            
-            responsiveVoice.speak(card.english, "US English Male", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1,
-                onend: () => {
-                    playedCount++;
-                    if (playedCount < count) {
-                        // 短暫間隔後重複播放同一個單字
-                        setTimeout(playOnce, 500);
-                    } else {
-                        if (callback) callback();
-                    }
-                }
-            });
+
+            await speakEnglishText(card.english);
+            if (!isPlaying) {
+                return;
+            }
+            playedCount++;
+            if (playedCount < count) {
+                setTimeout(() => {
+                    playOnce().catch((err) => console.error(err));
+                }, 500);
+            } else if (callback) {
+                callback();
+            }
         }
-        
-        playOnce();
+
+        playOnce().catch((err) => console.error(err));
     }
     
     function stopPlayback() {
@@ -1979,10 +1684,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             playTimeout = null;
         }
         
-        // 停止語音播放
-        if (typeof responsiveVoice !== 'undefined') {
-            responsiveVoice.cancel();
-        }
+        cancelAllSpeechOutputs();
         
         playAllCardsBtn.disabled = false;
         playAllCardsBtn.textContent = '開始播放';

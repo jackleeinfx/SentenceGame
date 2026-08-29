@@ -11,6 +11,11 @@
 <body>
     <div class="container">
         <div class="checkbox-container">
+            <div class="card-type-selector">
+                <span class="card-type-label">分類：</span>
+                <button type="button" class="type-btn active" id="wordTypeBtn">單詞</button>
+                <button type="button" class="type-btn" id="sentenceTypeBtn">長句</button>
+            </div>
             <label>
                 <input type="checkbox" id="hideAddCard">
                 隱藏新增單詞卡
@@ -19,6 +24,22 @@
                 <input type="checkbox" id="hideSettings" checked>
                 隱藏設置
             </label>
+            <div class="playback-box">
+                <div class="playback-row-top">
+                    <span class="playback-label-group">
+                        <label>播放次數：</label>
+                        <input type="number" id="playCountInput" min="1" max="10" value="2">
+                        <span>次</span>
+                        <label>播放間隔：</label>
+                        <input type="number" id="playIntervalInput" min="1" max="30" value="3">
+                        <span>秒</span>
+                    </span>
+                    <span class="playback-btns">
+                        <button id="playAllCards" class="mode-btn">開始播放</button>
+                        <button id="shuffleCards" class="mode-btn">隨機排列</button>
+                    </span>
+                </div>
+            </div>
         </div>
 
         <div class="add-card-section">
@@ -28,7 +49,7 @@
                     <button id="pasteInputBtn" class="input-action-btn" type="button">一鍵貼上</button>
                 </div>
                 <div class="input-row">
-                    <textarea id="chineseTranslation" placeholder="系統自動翻譯結果" rows="1" readonly></textarea>
+                    <textarea id="chineseTranslation" placeholder="系統自動翻譯結果（可自行修改）" rows="1"></textarea>
                     <button id="copyTranslationBtn" class="input-action-btn" type="button">一鍵複製</button>
                 </div>
             </div>
@@ -38,42 +59,13 @@
                         <span class="star" data-rating="1">★</span>
                         <span class="star" data-rating="2">★</span>
                         <span class="star" data-rating="3">★</span>
-                        <span class="star" data-rating="4">★</span>
-                        <span class="star" data-rating="5">★</span>
                     </div>
-                    <span id="ratingValue">3</span>
+                    <span id="ratingValue">1</span>
                 </div>
                 <button id="addCard">新增單字卡</button>
                 <button id="translateBtn" class="translate-btn">翻譯</button>
             </div>
-            <div class="display-mode playback-row playback-actions" style="margin-top: 10px;">
-                <button id="playAllCards" class="mode-btn">開始播放</button>
-                <button id="shuffleCards" class="mode-btn">隨機排列</button>
-            </div>
-            <div class="display-mode playback-row playback-settings" style="margin-top: 8px;">
-                <label>播放次數：</label>
-                <input type="number" id="playCountInput" min="1" max="10" value="2">
-                <span>次</span>
-                <label>播放間隔：</label>
-                <input type="number" id="playIntervalInput" min="1" max="30" value="3">
-                <span>秒</span>
-            </div>
-        </div>
 
-        <div class="article-search-panel">
-            <div class="article-search-controls">
-                <label class="wiki-lang-label">
-                    <select id="articleSource" class="wiki-lang-select">
-                        <option value="guardian_search" selected>The Guardian：關鍵字搜尋</option>
-                        <option value="guardian_browse">The Guardian：分區最新（可不填關鍵字）</option>
-                    </select>
-                </label>
-                <input type="text" id="articleSearchInput" class="article-search-input" placeholder="關鍵字（選「分區最新」可不填）" autocomplete="off">
-                <button type="button" id="articleSearchBtn" class="input-action-btn">搜尋</button>
-                <button type="button" id="articleTrendingBtn" class="input-action-btn">隨機 Guardian 精選</button>
-            </div>
-            <p class="article-search-hint">新聞僅透過 The Guardian Open Platform API（預設 api-key=test，有流量上限；正式環境請至官網申請金鑰並改 main.js 的 GUARDIAN_API_KEY）。「關鍵字搜尋」需輸入關鍵字（若為中文會自動譯成英文再搜尋）；「分區最新」可不填關鍵字，會自多個版別合併最新文章。隨機精選按鈕同樣走 Guardian 分區。點選條目後以 API 內嵌正文為主，過短時才嘗試 Jina 讀原文。請用 https 本機或 GitHub Pages 開啟。一鍵存入後播放仍唸「英文」欄位。</p>
-            <div id="articleSearchResults" class="article-search-results" aria-live="polite"></div>
         </div>
 
         <!-- 顯示和排序控制區（不受隱藏設置控制） -->
@@ -91,6 +83,30 @@
                 <button id="sortByTime" class="mode-btn active">最新在前</button>
                 <button id="sortByRating" class="mode-btn">按星級</button>
                 <button id="sortByAlphabet" class="mode-btn">按字母</button>
+            </div>
+            <div class="display-mode" style="margin-top: 8px;">
+                <label>類型篩選：</label>
+                <button id="filterAll" class="mode-btn active">全部</button>
+                <button id="filterWord" class="mode-btn">只顯示單詞</button>
+                <button id="filterSentence" class="mode-btn">只顯示長句</button>
+            </div>
+            <div class="display-mode playback-row playback-tts" style="margin-top: 8px;">
+                <label for="ttsEngineSelect">英文朗讀：</label>
+                <select id="ttsEngineSelect" class="tts-select" aria-label="選擇英文語音">
+                    <optgroup label="ResponsiveVoice（雲端・預設較穩）">
+                        <option value="rv:US English Male" selected>RV · 美語男聲</option>
+                        <option value="rv:US English Female">RV · 美語女聲</option>
+                        <option value="rv:UK English Male">RV · 英國男聲</option>
+                        <option value="rv:UK English Female">RV · 英國女聲</option>
+                        <option value="rv:Australian Female">RV · 澳洲女聲</option>
+                        <option value="rv:Indian English Female">RV · 印度英語女聲</option>
+                    </optgroup>
+                    <optgroup label="Web Speech（裝置內建・手機常較自然）">
+                        <option value="ws:auto">內建 · 自動挑英文最佳</option>
+                        <option value="ws:en-US">內建 · 美式 en-US</option>
+                        <option value="ws:en-GB">內建 · 英式 en-GB</option>
+                    </optgroup>
+                </select>
             </div>
         </div>
 

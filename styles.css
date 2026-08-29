@@ -82,6 +82,8 @@ button:hover {
 }
 
 .flashcard .english {
+    /* 分類標籤在上、內文在下：讓出上方空間給標籤 */
+    margin-top: 22px;
     margin-bottom: 10px;
     word-break: break-word;
     white-space: pre-wrap;
@@ -169,11 +171,6 @@ button:hover {
     gap: 8px 10px;
 }
 
-.playback-actions,
-.playback-settings {
-    justify-content: flex-end;
-}
-
 .playback-row input[type="number"] {
     width: 72px;
     padding: 5px 8px;
@@ -183,6 +180,33 @@ button:hover {
 }
 
 body.dark-mode .playback-row input[type="number"] {
+    background-color: #1a1a1a;
+    border-color: #404040;
+    color: #ffffff;
+}
+
+.playback-tts {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+}
+
+.playback-tts .tts-select {
+    flex: 1 1 min(100%, 280px);
+    min-width: 0;
+    max-width: 100%;
+    padding: 6px 8px;
+    font-size: 13px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+.playback-tts label {
+    flex-shrink: 0;
+}
+
+body.dark-mode .playback-tts .tts-select {
     background-color: #1a1a1a;
     border-color: #404040;
     color: #ffffff;
@@ -256,6 +280,93 @@ body.dark-mode .playback-row input[type="number"] {
     z-index: 1;
     transition: all 0.2s ease;
     opacity: 0.6;
+}
+
+/* 編輯按鈕：位於刪除鍵左側 */
+.edit-btn {
+    position: absolute;
+    top: 8px;
+    right: 40px;
+    background-color: transparent;
+    color: #666;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 15px;
+    border: none;
+    z-index: 1;
+    transition: all 0.2s ease;
+    opacity: 0.6;
+}
+
+.edit-btn:hover {
+    background-color: #1976d2;
+    color: white;
+    opacity: 1;
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.flashcard .edit-btn {
+    display: flex;
+}
+
+/* 卡片內嵌編輯 */
+.flashcard.editing {
+    cursor: default;
+}
+
+.edit-textarea {
+    width: 100%;
+    min-height: 42px;
+    padding: 6px 8px;
+    margin: 0 0 6px;
+    border: 1px solid #90caf9;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none; /* 由程式依內容自動增高，不出現捲動條 */
+    overflow: hidden;
+    box-sizing: border-box;
+    background-color: #fff;
+    color: #333;
+    display: block;
+}
+
+.edit-textarea.edit-zh {
+    margin-top: 4px;
+}
+
+body.dark-mode .edit-textarea {
+    background-color: #1a1a1a;
+    border-color: #404040;
+    color: #fff;
+}
+
+.edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.edit-actions button {
+    flex: 1;
+}
+
+.edit-save {
+    background-color: #4CAF50;
+}
+
+.edit-cancel {
+    background-color: #9e9e9e;
+}
+
+.edit-cancel:hover {
+    background-color: #757575;
 }
 
 .delete-btn:hover {
@@ -448,12 +559,14 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 
 .checkbox-container {
     background-color: white;
-    padding: 10px 20px;
+    padding: 12px 20px;
     border-radius: 8px;
     margin-bottom: 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
 }
 
 .checkbox-container label {
@@ -473,6 +586,59 @@ body.dark-mode input[type="range"]::-moz-range-thumb {
 body.dark-mode .checkbox-container {
     background-color: #2d2d2d;
     color: #ffffff;
+}
+
+/* 播放設定盒：佔滿整行並換行，與分類／勾選項分開 */
+.playback-box {
+    flex: 1 1 100%;
+    margin-top: 2px;
+    padding-top: 0;
+}
+
+.playback-row-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+}
+
+.playback-label-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+}
+
+.playback-label-group label {
+    font-size: 14px;
+    color: #555;
+    cursor: default;
+}
+
+.playback-label-group input[type="number"] {
+    width: 64px;
+    padding: 5px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.playback-btns {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+body.dark-mode .playback-label-group label {
+    color: #ccc;
+}
+
+body.dark-mode .playback-label-group input[type="number"] {
+    background-color: #1a1a1a;
+    border-color: #404040;
+    color: #fff;
 }
 
 body.dark-mode .input-action-btn {
@@ -541,8 +707,8 @@ body.dark-mode .input-action-btn:hover {
 /* 卡片中的星級顯示 */
 .card-rating {
     position: absolute;
-    bottom: 10px;
-    left: 10px;
+    top: 8px;
+    left: 56px;
     display: flex;
     gap: 1px;
     font-size: 14px;
@@ -597,292 +763,15 @@ body.dark-mode .delete-btn:hover {
     color: white;
 }
 
-/* 維基百科文章搜尋 */
-.article-search-panel {
-    background-color: white;
-    padding: 16px 20px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.article-search-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-}
-
-.wiki-lang-label {
-    display: flex;
-    align-items: center;
-}
-
-.article-search-controls .wiki-lang-select {
-    min-height: 36px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid #ddd;
-    font-size: 14px;
-    background-color: #fff;
-}
-
-.article-search-input {
-    flex: 1;
-    min-width: 140px;
-    padding: 8px 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 16px;
-}
-
-.article-search-hint {
-    font-size: 12px;
-    color: #666;
-    margin-top: 8px;
-    line-height: 1.4;
-}
-
-.article-search-results {
-    margin-top: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.article-results-empty,
-.article-results-loading {
-    font-size: 14px;
-    color: #666;
-}
-
-.article-result-item {
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 10px 12px;
-    background: #fafafa;
-}
-
-.article-result-title {
-    font-weight: bold;
-    font-size: 15px;
-    margin-bottom: 4px;
-}
-
-.article-result-meta {
-    font-size: 12px;
-    color: #666;
-    margin-bottom: 6px;
-}
-
-.article-result-excerpt {
-    font-size: 13px;
-    color: #444;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-.article-result-actions {
-    margin-top: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.article-result-link {
-    font-size: 13px;
-    color: #1976d2;
-}
-
-.article-save-btn {
-    flex-shrink: 0;
-}
-
-.article-results-pick-hint {
-    font-size: 13px;
-    color: #555;
-    margin: 0 0 4px;
-    line-height: 1.4;
-}
-
-.article-result-pick-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.article-result-pick-row {
-    display: block;
-    width: 100%;
-    text-align: left;
-    cursor: pointer;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 10px 12px;
-    background: #fafafa;
-    font: inherit;
-    color: inherit;
-    transition: background 0.15s, border-color 0.15s;
-}
-
-.article-result-pick-row:hover {
-    background: #f0f7ff;
-    border-color: #90caf9;
-}
-
-.article-result-pick-row.is-selected {
-    background: #e3f2fd;
-    border-color: #1976d2;
-}
-
-.article-result-pick-title {
-    font-weight: 600;
-    font-size: 15px;
-    line-height: 1.35;
-    word-break: break-word;
-}
-
-.article-result-pick-meta {
-    font-size: 12px;
-    color: #666;
-    margin-top: 4px;
-}
-
-.article-search-detail {
-    margin-top: 12px;
-    padding: 12px 14px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    background: #fff;
-}
-
-.article-search-detail--empty {
-    background: #f9f9f9;
-    color: #888;
-}
-
-.article-detail-placeholder {
-    margin: 0;
-    font-size: 14px;
-}
-
-.article-detail-head {
-    font-weight: 700;
-    font-size: 16px;
-    margin-bottom: 10px;
-    word-break: break-word;
-}
-
-.article-detail-body {
-    font-size: 14px;
-    line-height: 1.5;
-    color: #333;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: min(72vh, 720px);
-    overflow-y: auto;
-}
-
-.article-detail-body--loading {
-    color: #666;
-    font-style: italic;
-}
-
-.article-detail-actions {
-    margin-top: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-body.dark-mode .article-search-panel {
-    background-color: #2d2d2d;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-body.dark-mode .article-result-item {
-    background-color: #252525;
-    border-color: #404040;
-}
-
-body.dark-mode .article-result-title {
-    color: #fff;
-}
-
-body.dark-mode .article-result-meta {
-    color: #9e9e9e;
-}
-
-body.dark-mode .article-result-excerpt {
+/* 夜間模式下的編輯按鈕樣式 */
+body.dark-mode .edit-btn {
     color: #ccc;
+    background-color: transparent;
 }
 
-body.dark-mode .article-search-input,
-body.dark-mode .article-search-controls .wiki-lang-select {
-    background-color: #1a1a1a;
-    border-color: #404040;
-    color: #fff;
-}
-
-body.dark-mode .article-search-hint,
-body.dark-mode .article-results-empty,
-body.dark-mode .article-results-loading {
-    color: #b3b3b3;
-}
-
-body.dark-mode .article-result-link {
-    color: #64b5f6;
-}
-
-body.dark-mode .article-results-pick-hint {
-    color: #b0b0b0;
-}
-
-body.dark-mode .article-result-pick-row {
-    background: #252525;
-    border-color: #404040;
-    color: #eee;
-}
-
-body.dark-mode .article-result-pick-row:hover {
-    background: #2a3540;
-    border-color: #546e7a;
-}
-
-body.dark-mode .article-result-pick-row.is-selected {
-    background: #1e3a5f;
-    border-color: #64b5f6;
-}
-
-body.dark-mode .article-result-pick-meta {
-    color: #9e9e9e;
-}
-
-body.dark-mode .article-search-detail {
-    background: #252525;
-    border-color: #404040;
-}
-
-body.dark-mode .article-search-detail--empty {
-    background: #1e1e1e;
-    color: #888;
-}
-
-body.dark-mode .article-detail-head {
-    color: #fff;
-}
-
-body.dark-mode .article-detail-body {
-    color: #ccc;
-}
-
-body.dark-mode .article-detail-body--loading {
-    color: #9e9e9e;
+body.dark-mode .edit-btn:hover {
+    background-color: #1976d2;
+    color: white;
 }
 
 /* 統一按鈕尺寸 */
@@ -978,4 +867,87 @@ body.dark-mode .article-detail-body--loading {
         font-size: 12px;
     }
 }
-  
+
+/* ===== 分類徽章 ===== */
+.card-type-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1;
+    font-size: 11px;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-weight: bold;
+    color: #fff;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-type-badge:hover {
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.8);
+    transform: scale(1.08);
+}
+.card-type-badge.word {
+    background-color: #2196f3;
+}
+.card-type-badge.sentence {
+    background-color: #ff9800;
+}
+
+/* ===== 新增卡分類選擇器 ===== */
+.card-type-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.card-type-label {
+    font-size: 14px;
+    color: #666;
+}
+.type-btn {
+    background-color: #e0e0e0;
+    color: #444;
+    padding: 6px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+.type-btn:hover {
+    background-color: #cfd8dc;
+}
+.type-btn.active {
+    background-color: #2196f3;
+    color: #fff;
+}
+
+/* 「長句」按鈕與卡片上的長句標籤同為橘色 */
+#sentenceTypeBtn.active {
+    background-color: #ff9800;
+    color: #fff;
+}
+
+/* 夜間模式 */
+body.dark-mode .card-type-label {
+    color: #bbb;
+}
+body.dark-mode .type-btn {
+    background-color: #3a3a3a;
+    color: #ccc;
+}
+body.dark-mode .type-btn:hover {
+    background-color: #4a4a4a;
+}
+body.dark-mode .type-btn.active {
+    background-color: #1e88e5;
+    color: #fff;
+}
+/* 夜間模式下長句按鈕仍維持橘色，與卡片長句標籤一致 */
+body.dark-mode #sentenceTypeBtn.active {
+    background-color: #ff9800;
+    color: #fff;
+}

@@ -21,8 +21,12 @@ CREATE TABLE user_cards (
     english TEXT NOT NULL,
     chinese TEXT NOT NULL,
     rating INTEGER DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
+    card_type TEXT DEFAULT 'word',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 如果表已存在，添加 card_type 欄位（word=單詞 / sentence=長句）
+ALTER TABLE user_cards ADD COLUMN IF NOT EXISTS card_type TEXT DEFAULT 'word';
 
 -- 創建用戶設置表
 CREATE TABLE user_settings (
@@ -75,6 +79,7 @@ const supabaseKey = 'YOUR_SUPABASE_ANON_KEY' // 替換為您的 Supabase anon ke
 | `id` | BIGSERIAL | 主鍵，自動遞增 |
 | `english` | TEXT | 英文單字 |
 | `chinese` | TEXT | 中文翻譯 |
+| `card_type` | TEXT | 卡片分類（'word'=單詞 / 'sentence'=長句，預設'word'） |
 | `rating` | INTEGER | 星級評分（0-5星，預設0） |
 | `created_at` | TIMESTAMPTZ | 創建時間（自動生成） |
 
