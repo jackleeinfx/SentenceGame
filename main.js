@@ -15,11 +15,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const addCardSection = document.querySelector('.add-card-section');
     const controlSection = document.querySelector('.control-section');
 
-    // 設置隱藏功能的事件監聽器
+    // 設置顯示功能的事件監聽器（打勾＝顯示）
     if (hideAddCardCheckbox) {
         hideAddCardCheckbox.addEventListener('change', () => {
             const isChecked = hideAddCardCheckbox.checked;
-            addCardSection.classList.toggle('hidden', isChecked);
+            addCardSection.classList.toggle('hidden', !isChecked);
             saveSetting('hideAddCard', isChecked);
         });
     }
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (hideSettingsCheckbox) {
         hideSettingsCheckbox.addEventListener('change', () => {
             const isChecked = hideSettingsCheckbox.checked;
-            controlSection.classList.toggle('hidden', isChecked);
+            controlSection.classList.toggle('hidden', !isChecked);
         });
     }
 
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         playInterval: '1',
         displayMode: 'all',
         sortMode: 'time',
-        hideAddCard: 'false',
+        hideAddCard: 'true',
         darkMode: 'false',
         englishTts: 'rv:US English Male',
         cardType: 'word',
@@ -253,14 +253,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             setCardTypeFilter(settings.typeFilter, true); // skipSave = true
         }
         
-        // 應用隱藏設置
+        // 應用顯示設置（打勾＝顯示）
         if (settings.hideAddCard === 'true') {
             hideAddCardCheckbox.checked = true;
+            addCardSection.classList.remove('hidden');
+        } else {
+            hideAddCardCheckbox.checked = false;
             addCardSection.classList.add('hidden');
         }
         
         // hideSettings 為臨時 UI 狀態，不從本地/雲端回讀；每次進站預設隱藏
-        hideSettingsCheckbox.checked = true;
+        hideSettingsCheckbox.checked = false;
         controlSection.classList.add('hidden');
         
         // 應用夜間模式
