@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 設置管理
     const defaultSettings = {
         playCount: '2',
-        playInterval: '3',
+        playInterval: '1',
         displayMode: 'all',
         sortMode: 'time',
         hideAddCard: 'false',

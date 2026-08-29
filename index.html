@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>單字卡學習</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -12,7 +12,6 @@
     <div class="container">
         <div class="checkbox-container">
             <div class="card-type-selector">
-                <span class="card-type-label">分類：</span>
                 <button type="button" class="type-btn active" id="wordTypeBtn">單詞</button>
                 <button type="button" class="type-btn" id="sentenceTypeBtn">長句</button>
             </div>
@@ -27,12 +26,10 @@
             <div class="playback-box">
                 <div class="playback-row-top">
                     <span class="playback-label-group">
-                        <label>播放次數：</label>
+                        <label>次數：</label>
                         <input type="number" id="playCountInput" min="1" max="10" value="2">
-                        <span>次</span>
-                        <label>播放間隔：</label>
-                        <input type="number" id="playIntervalInput" min="1" max="30" value="3">
-                        <span>秒</span>
+                        <label>間隔：</label>
+                        <input type="number" id="playIntervalInput" min="1" max="30" value="1">
                     </span>
                     <span class="playback-btns">
                         <button id="playAllCards" class="mode-btn">開始播放</button>
