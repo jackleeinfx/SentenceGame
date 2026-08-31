@@ -70,7 +70,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isPlaying = false;
     let playTimeout = null;
     let currentPlayIndex = 0;
-    let translationDebounceTimer = null;
     let isLoadingCards = false;
     let hasMoreCards = true;
     let cardsOffset = 0;
@@ -853,17 +852,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             console.log('正在保存新卡片...');
-            const normalized = await normalizeCardInput(englishRaw, chineseRaw);
 
-            if (!normalized.english || !normalized.chinese) {
-                alert('無法自動翻譯完成，請補上另一個語言後再儲存');
+            // 手動翻譯模式：不再自動補齊另一邊語言，缺任一欄就提示先翻譯
+            if (!englishRaw || !chineseRaw) {
+                alert('請填寫英文與中文，或先按「翻譯」按鈕產生翻譯後再儲存');
                 return;
             }
 
-            setFieldValue(englishInput, normalized.english);
-            setFieldValue(chineseInput, normalized.chinese);
-
-            await persistFlashcard(normalized.english, normalized.chinese, {
+            await persistFlashcard(englishRaw, chineseRaw, {
                 clearForm: true
             });
             console.log('成功保存到 Supabase');
@@ -1079,15 +1075,76 @@ document.addEventListener('DOMContentLoaded', async () => {
     sortByAlphabetBtn.addEventListener('click', () => setSortMode('alphabet'));
 
     // 翻譯功能
-    async function translateText(text, from, to) {
+    // 主要翻譯服務：Google（免費 gtx 端點）
+    async function translateWithGoogle(text, from, to) {
         try {
-            const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`);
+            const response = await fetch(
+                `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${from}&tl=${to}&dt=t&q=${encodeURIComponent(text)}`,
+                { cache: 'no-store' }
+            );
+
+            // 檢查回應狀態，避免 Google 限流(429/403)時誤判為內容錯誤
+            if (!response.ok) {
+                console.warn(`主要翻譯服務(Google)失敗 (HTTP ${response.status})`);
+                return { error: 'http', status: response.status, message: `主要翻譯服務(Google)暫時不可用 (HTTP ${response.status})` };
+            }
+
             const data = await response.json();
+            if (!data || !Array.isArray(data[0]) || !data[0][0]) {
+                return { error: 'bad_response', message: '主要翻譯服務(Google)回應異常' };
+            }
             return data[0][0][0];
         } catch (error) {
-            console.error('翻譯錯誤:', error);
-            return null;
+            console.error('主要翻譯服務(Google)錯誤:', error);
+            return { error: 'network', message: '主要翻譯服務(Google)網路連線失敗' };
         }
+    }
+
+    // 備用翻譯服務：MyMemory（免費、支援瀏覽器 CORS）
+    async function translateWithMyMemory(text, from, to) {
+        try {
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`;
+            const response = await fetch(url, { cache: 'no-store' });
+
+            if (!response.ok) {
+                console.warn(`備用翻譯服務(MyMemory)失敗 (HTTP ${response.status})`);
+                return { error: 'http', status: response.status, message: `備用翻譯服務(MyMemory)暫時不可用 (HTTP ${response.status})` };
+            }
+
+            const data = await response.json();
+
+            // MyMemory 額度用盡或錯誤時，responseStatus 會是非 200 的數字
+            if (data && data.responseStatus && data.responseStatus !== 200) {
+                console.warn(`備用翻譯服務(MyMemory)回應狀態 ${data.responseStatus}`);
+                return { error: 'quota', message: '備用翻譯服務(MyMemory)額度已達上限或無法翻譯' };
+            }
+
+            const translated = data && data.responseData && data.responseData.translatedText;
+            if (translated) {
+                return translated;
+            }
+            return { error: 'bad_response', message: '備用翻譯服務(MyMemory)回應異常' };
+        } catch (error) {
+            console.error('備用翻譯服務(MyMemory)錯誤:', error);
+            return { error: 'network', message: '備用翻譯服務(MyMemory)網路連線失敗' };
+        }
+    }
+
+    // 翻譯總入口：主要服務失敗時自動改用備用服務
+    async function translateText(text, from, to) {
+        const primary = await translateWithGoogle(text, from, to);
+        if (primary && typeof primary === 'string') {
+            return primary;
+        }
+
+        console.warn('主要翻譯服務失敗，改用備用服務(MyMemory)...');
+        const backup = await translateWithMyMemory(text, from, to);
+        if (backup && typeof backup === 'string') {
+            return backup;
+        }
+
+        console.error('主要與備用翻譯服務皆失敗');
+        return { error: 'all_failed', message: '主要與備用翻譯服務皆暫時不可用，請稍後再試' };
     }
 
     // 判斷文字是否包含中文
@@ -1286,42 +1343,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isChineseText(english)) {
                 const originalChinese = english;
                 const translatedEnglish = await translateText(originalChinese, 'zh-TW', 'en');
+                if (translatedEnglish && typeof translatedEnglish === 'object') throw translatedEnglish;
                 english = translatedEnglish ? translatedEnglish.trim() : '';
                 chinese = originalChinese;
             } else {
                 const translatedChinese = await translateText(english, 'en', 'zh-TW');
+                if (translatedChinese && typeof translatedChinese === 'object') throw translatedChinese;
                 chinese = translatedChinese ? translatedChinese.trim() : '';
             }
         } else if (!english && chinese) {
             if (isChineseText(chinese)) {
                 const translatedEnglish = await translateText(chinese, 'zh-TW', 'en');
+                if (translatedEnglish && typeof translatedEnglish === 'object') throw translatedEnglish;
                 english = translatedEnglish ? translatedEnglish.trim() : '';
             } else {
                 const originalEnglish = chinese;
                 const translatedChinese = await translateText(originalEnglish, 'en', 'zh-TW');
+                if (translatedChinese && typeof translatedChinese === 'object') throw translatedChinese;
                 english = originalEnglish;
                 chinese = translatedChinese ? translatedChinese.trim() : '';
             }
         }
 
         return { english, chinese };
-    }
-
-    async function autoTranslateFromSourceInput() {
-        const sourceText = englishInput.value.trim();
-        if (!sourceText) {
-            setFieldValue(chineseInput, '');
-            updateTranslateButtonState();
-            return;
-        }
-
-        const normalized = await normalizeCardInput(sourceText, '');
-        if (isChineseText(sourceText)) {
-            setFieldValue(chineseInput, normalized.english || '');
-        } else {
-            setFieldValue(chineseInput, normalized.chinese || '');
-        }
-        updateTranslateButtonState();
     }
 
     // 處理翻譯按鈕點擊
@@ -1350,7 +1394,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         } catch (error) {
             console.error('翻譯過程出錯:', error);
-            alert('翻譯失敗，請稍後再試');
+            const msg = (error && typeof error === 'object' && error.message)
+                ? error.message
+                : '翻譯失敗，請稍後再試';
+            alert(msg);
         } finally {
             translateBtn.disabled = false;
             translateBtn.textContent = '翻譯';
@@ -1366,14 +1413,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     englishInput.addEventListener('input', () => {
         autoResizeTextarea(englishInput);
         updateTranslateButtonState();
-        if (translationDebounceTimer) {
-            clearTimeout(translationDebounceTimer);
-        }
-        translationDebounceTimer = setTimeout(() => {
-            autoTranslateFromSourceInput().catch(error => {
-                console.error('自動翻譯失敗:', error);
-            });
-        }, 400);
     });
 
     // 初始化翻譯按鈕狀態
@@ -1389,7 +1428,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             setFieldValue(englishInput, text.trim());
-            await autoTranslateFromSourceInput();
         } catch (error) {
             console.error('貼上失敗:', error);
             alert('貼上失敗，請確認瀏覽器已允許剪貼簿權限');
